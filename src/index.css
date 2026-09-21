@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Bornopata';
+  src: url('/font/Bornopata-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bornopata';
+  src: url('/font/Bornopata-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Prothoma';
+  src: url('/font/PROTHOMA.TTF') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  font-family: 'Bornopata', 'Prothoma', 'Hind Siliguri', 'Noto Serif Bengali', 'SolaimanLipi', 'Kalpurush', sans-serif;
+}
+
+body {
+  font-family: 'Bornopata', 'Prothoma', 'Hind Siliguri', 'Noto Serif Bengali', 'SolaimanLipi', 'Kalpurush', sans-serif;
+}
+
+input, button, select, textarea {
+  font-family: inherit;
+  border-radius: 0px !important;
+}
+
+/* Sharp corners for cards, containers, sections, and badges */
+.rounded-3xl,
+.rounded-2xl,
+.rounded-xl,
+.rounded-lg,
+.rounded-md,
+.rounded-sm,
+.rounded {
+  border-radius: 0px !important;
+}

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "post-official-1",
+    "authorId": "user-admin",
+    "authorName": "Mukul Niketon High School (Admin & Headmaster Office)",
+    "authorAvatar": "https://images.unsplash.com/photo-1577896851231-70ef18881754?w=400&auto=format&fit=crop&q=80",
+    "authorBatch": "School Administration",
+    "content": "মুকুল নিকেতন উচ্চ বিদ্যালয়ের সকল প্রাক্তন ও বর্তমান শিক্ষার্থীদের জানাই আন্তরিক শুভেচ্ছা। ১৯৭০ সালে শ্রদ্ধেয় প্রতিষ্ঠাতা অধ্যক্ষ আমীর আহাম্মদ চৌধুরী রতন এর প্রতিষ্ঠিত এই বিদ্যাপীঠের সকল ব্যাচের শিক্ষার্থীদের একত্রিত করতে এই ডিজিটাল ডিরেক্টরি ও পুনর্মিলনী পোর্টাল চালু করা হয়েছে। সকল প্রাক্তনীকে প্ল্যাটফর্মে যুক্ত হয়ে নিজেদের তথ্য আপডেট করার আহ্বান জানাচ্ছি।",
+    "imageUrl": "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80",
+    "createdAt": "Official Notice",
+    "likes": [
+      "user-chitron"
+    ],
+    "comments": [
+      {
+        "id": "c-admin-1",
+        "authorId": "user-chitron",
+        "authorName": "Chitron Bhattacharjee",
+        "authorAvatar": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80",
+        "authorBatch": "SSC 2026",
+        "content": "আমাদের প্রিয় মুকুল নিকেতনের সকল শিক্ষক-শিক্ষিকাদের প্রতি সশ্রদ্ধ সালাম। আমরা সকল শিক্ষার্থীরা একসাথে বিদ্যালয়ের ঐতিহ্য সমুন্নত রাখতে অঙ্গীকারবদ্ধ।",
+        "createdAt": "1 day ago"
+      }
+    ]
+  },
+  {
+    "id": "post-official-2",
+    "authorId": "user-chitron",
+    "authorName": "Chitron Bhattacharjee",
+    "authorAvatar": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80",
+    "authorBatch": "SSC 2026",
+    "content": "১০ মহারাজা রোডের আমাদের স্কুল ক্যাম্পাস, সকালের সমাবেশ, বিতর্ক ক্লাবের সেশন আর বার্ষিক ক্রীড়া দিবসের স্মৃতিগুলো চির অম্লান। সকল ব্যাচের সিনিয়র ও জুনিয়র বন্ধুদের প্ল্যাটফর্মে স্বাগত!",
+    "imageUrl": "https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&auto=format&fit=crop&q=80",
+    "createdAt": "Community Welcome",
+    "likes": [
+      "user-admin"
+    ],
+    "comments": []
+  }
+]

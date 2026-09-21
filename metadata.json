@@ -1,0 +1,6 @@
+{
+  "name": "Mukul Niketan Alumni Network",
+  "description": "মুকুল নিকেতন প্রাক্তন শিক্ষার্থী নেটওয়ার্ক — একই শিকড়, একসাথে পথচলা • Connecting Generations of Mukul Niketan",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

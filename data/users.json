@@ -1,0 +1,61 @@
+[
+  {
+    "id": "user-chowdhury-onup-amir",
+    "name": "Chowdhury Onup Amir",
+    "nickname": "Onup Amir",
+    "email": "chowdhuryonupamir@gmail.com",
+    "phone": "+880 1711-000000",
+    "batch": "School Administration & Trustee",
+    "classSection": "Alumni Executive Board",
+    "schoolYears": "1970 – Present",
+    "currentOccupation": "Executive Admin & Trustee, Mukul Niketon High School",
+    "shortBio": "Executive Admin & Trustee of Mukul Niketon High School Alumni Association. Full administrative authority for platform moderation and event management.",
+    "location": "10, Maharaja Road, Mymensingh-2200",
+    "profilePhoto": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
+    "role": "admin",
+    "status": "approved",
+    "joinedDate": "1970-01-01",
+    "showEmailPhone": true
+  },
+  {
+    "id": "user-admin",
+    "name": "Mukul Niketon High School (Admin & Headmaster Office)",
+    "nickname": "Headmaster Office",
+    "email": "info@mukulniketonhs.edu.bd",
+    "phone": "+880 91-65400",
+    "batch": "School Administration",
+    "classSection": "Administrative Directorate",
+    "schoolYears": "1970 – Present",
+    "currentOccupation": "Headmaster: Md. Shamsul Alam • Mukul Niketon High School",
+    "shortBio": "Official administrative portal of Mukul Niketon High School, 10 Maharaja Road, Mymensingh. Founded in 1970 by Principal Amir Ahammad Chowdhury Ratan. EIIN: 111847.",
+    "location": "10, Maharaja Road, Mymensingh-2200",
+    "profilePhoto": "https://images.unsplash.com/photo-1577896851231-70ef18881754?w=400&auto=format&fit=crop&q=80",
+    "role": "admin",
+    "status": "approved",
+    "joinedDate": "1970-01-01",
+    "showEmailPhone": true
+  },
+  {
+    "id": "user-chitron",
+    "name": "Chitron Bhattacharjee",
+    "nickname": "Chitron",
+    "email": "chitronbhattacharjee@gmail.com",
+    "phone": "+880 1712-345678",
+    "batch": "SSC 2026",
+    "classSection": "Class 10, Section A",
+    "schoolYears": "2016 – 2026",
+    "currentOccupation": "Student & Alumni Volunteer, Mukul Niketon High School",
+    "shortBio": "Proud student of Mukul Niketon High School. Technology and science enthusiast, working with alumni to preserve campus memories and connect batches.",
+    "location": "Mymensingh, Bangladesh",
+    "socialLinks": {
+      "facebook": "https://facebook.com",
+      "github": "https://github.com",
+      "linkedin": "https://linkedin.com"
+    },
+    "profilePhoto": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80",
+    "role": "student",
+    "status": "approved",
+    "joinedDate": "2026-01-15",
+    "showEmailPhone": false
+  }
+]
