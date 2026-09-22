@@ -75,13 +75,11 @@ export function subscribeToUsers(callback: (users: User[]) => void): () => void 
   try {
     const usersCol = collection(db, COLLECTIONS.users);
     unsubFirestore = onSnapshot(usersCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const usersList: User[] = [];
-        snapshot.forEach((docSnap) => {
-          usersList.push(docSnap.data() as User);
-        });
-        callback(usersList);
-      }
+      const usersList: User[] = [];
+      snapshot.forEach((docSnap) => {
+        usersList.push(docSnap.data() as User);
+      });
+      callback(usersList);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, COLLECTIONS.users);
     });
@@ -96,9 +94,7 @@ export function subscribeToUsers(callback: (users: User[]) => void): () => void 
       const val = snapshot.val();
       if (val) {
         const usersList = Object.values(val) as User[];
-        if (usersList.length > 0) {
-          callback(usersList);
-        }
+        callback(usersList);
       }
     }, (err) => {
       console.warn('RTDB users listener notice:', err);
@@ -120,15 +116,13 @@ export function subscribeToPosts(callback: (posts: Post[]) => void): () => void 
   try {
     const postsCol = collection(db, COLLECTIONS.posts);
     unsubFirestore = onSnapshot(postsCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const postsList: Post[] = [];
-        snapshot.forEach((docSnap) => {
-          postsList.push(docSnap.data() as Post);
-        });
-        // Sort posts descending by createdAt
-        postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(postsList);
-      }
+      const postsList: Post[] = [];
+      snapshot.forEach((docSnap) => {
+        postsList.push(docSnap.data() as Post);
+      });
+      // Sort posts descending by createdAt
+      postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(postsList);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, COLLECTIONS.posts);
     });
@@ -142,10 +136,8 @@ export function subscribeToPosts(callback: (posts: Post[]) => void): () => void 
       const val = snapshot.val();
       if (val) {
         const postsList = Object.values(val) as Post[];
-        if (postsList.length > 0) {
-          postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          callback(postsList);
-        }
+        postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(postsList);
       }
     }, (err) => {
       console.warn('RTDB posts listener notice:', err);
@@ -165,13 +157,11 @@ export function subscribeToEvents(callback: (events: ReunionEvent[]) => void): (
   try {
     const eventsCol = collection(db, COLLECTIONS.events);
     unsubFirestore = onSnapshot(eventsCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const eventsList: ReunionEvent[] = [];
-        snapshot.forEach((docSnap) => {
-          eventsList.push(docSnap.data() as ReunionEvent);
-        });
-        callback(eventsList);
-      }
+      const eventsList: ReunionEvent[] = [];
+      snapshot.forEach((docSnap) => {
+        eventsList.push(docSnap.data() as ReunionEvent);
+      });
+      callback(eventsList);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, COLLECTIONS.events);
     });
@@ -185,9 +175,7 @@ export function subscribeToEvents(callback: (events: ReunionEvent[]) => void): (
       const val = snapshot.val();
       if (val) {
         const eventsList = Object.values(val) as ReunionEvent[];
-        if (eventsList.length > 0) {
-          callback(eventsList);
-        }
+        callback(eventsList);
       }
     }, (err) => {
       console.warn('RTDB events listener notice:', err);
@@ -207,13 +195,11 @@ export function subscribeToProducts(callback: (products: Product[]) => void): ()
   try {
     const productsCol = collection(db, COLLECTIONS.products);
     unsubFirestore = onSnapshot(productsCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const productsList: Product[] = [];
-        snapshot.forEach((docSnap) => {
-          productsList.push(docSnap.data() as Product);
-        });
-        callback(productsList);
-      }
+      const productsList: Product[] = [];
+      snapshot.forEach((docSnap) => {
+        productsList.push(docSnap.data() as Product);
+      });
+      callback(productsList);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, COLLECTIONS.products);
     });
@@ -227,9 +213,7 @@ export function subscribeToProducts(callback: (products: Product[]) => void): ()
       const val = snapshot.val();
       if (val) {
         const productsList = Object.values(val) as Product[];
-        if (productsList.length > 0) {
-          callback(productsList);
-        }
+        callback(productsList);
       }
     }, (err) => {
       console.warn('RTDB products listener notice:', err);
@@ -249,13 +233,11 @@ export function subscribeToOrders(callback: (orders: OrderInquiry[]) => void): (
   try {
     const ordersCol = collection(db, COLLECTIONS.orders);
     unsubFirestore = onSnapshot(ordersCol, (snapshot) => {
-      if (!snapshot.empty) {
-        const ordersList: OrderInquiry[] = [];
-        snapshot.forEach((docSnap) => {
-          ordersList.push(docSnap.data() as OrderInquiry);
-        });
-        callback(ordersList);
-      }
+      const ordersList: OrderInquiry[] = [];
+      snapshot.forEach((docSnap) => {
+        ordersList.push(docSnap.data() as OrderInquiry);
+      });
+      callback(ordersList);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, COLLECTIONS.orders);
     });
@@ -269,9 +251,7 @@ export function subscribeToOrders(callback: (orders: OrderInquiry[]) => void): (
       const val = snapshot.val();
       if (val) {
         const ordersList = Object.values(val) as OrderInquiry[];
-        if (ordersList.length > 0) {
-          callback(ordersList);
-        }
+        callback(ordersList);
       }
     }, (err) => {
       console.warn('RTDB orders listener notice:', err);
@@ -394,6 +374,33 @@ export async function saveOrderToFirebase(order: OrderInquiry): Promise<void> {
 }
 
 // ----------------- Bulk Seed / Initial Cloud Push -----------------
+
+export async function clearAllCloudData(): Promise<void> {
+  // Clear Realtime Database paths
+  try {
+    await set(ref(rtdb, 'users'), null);
+    await set(ref(rtdb, 'posts'), null);
+    await set(ref(rtdb, 'events'), null);
+    await set(ref(rtdb, 'products'), null);
+    await set(ref(rtdb, 'orders'), null);
+  } catch (e) {
+    console.warn('Notice clearing RTDB:', e);
+  }
+
+  // Clear Firestore collections
+  const collectionsToClear = [COLLECTIONS.users, COLLECTIONS.posts, COLLECTIONS.events, COLLECTIONS.products, COLLECTIONS.orders];
+  for (const colName of collectionsToClear) {
+    try {
+      const colRef = collection(db, colName);
+      const snapshot = await getDocs(colRef);
+      for (const docSnap of snapshot.docs) {
+        await deleteDoc(doc(db, colName, docSnap.id));
+      }
+    } catch (err) {
+      console.warn(`Notice clearing Firestore ${colName}:`, err);
+    }
+  }
+}
 
 export async function seedAllToFirebase(data: {
   users: User[];

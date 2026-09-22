@@ -17,6 +17,7 @@ import {
   deleteProductFromFirebase,
   saveOrderToFirebase,
   seedAllToFirebase,
+  clearAllCloudData,
   testFirebaseConnection
 } from '../services/firebaseDb';
 import { firebaseConfig } from '../firebase';
@@ -123,19 +124,22 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Clean persistence loaders
   const [users, setUsers] = useState<User[]>(() => {
+    // If mock data cleanup has been performed, purge old mock users (like chitron, tanvir, etc.)
+    const MOCK_IDS = ['user-chitron-bhattacharjee', 'user-nusrat-jahan', 'user-tanvir-hasan', 'user-farhana-akter', 'user-sakib-al-hasan'];
     const saved = localStorage.getItem('mn_school_users_v2');
     let loadedUsers: User[] = INITIAL_USERS;
     if (saved) {
       try { 
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          loadedUsers = parsed;
+          // Remove any mock demo accounts from local storage
+          loadedUsers = parsed.filter(u => !MOCK_IDS.includes(u.id));
         }
       } catch (e) { console.error(e); }
     }
 
     // Ensure Chowdhury Onup Amir admin user is included
-    const hasOnupAmir = loadedUsers.some(u => isAdminName(u.name) || u.email.toLowerCase() === 'chowdhuryonupamir@gmail.com');
+    const hasOnupAmir = loadedUsers.some(u => isAdminName(u.name) || u.email?.toLowerCase() === 'chowdhuryonupamir@gmail.com');
     if (!hasOnupAmir) {
       const defaultOnup = INITIAL_USERS.find(u => u.id === 'user-chowdhury-onup-amir');
       if (defaultOnup) {
@@ -153,22 +157,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [posts, setPosts] = useState<Post[]>(() => {
+    const MOCK_POST_IDS = ['post-1', 'post-2', 'post-3'];
     const saved = localStorage.getItem('mn_school_posts_v2');
     if (saved) {
       try { 
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(p => !MOCK_POST_IDS.includes(p.id));
+        }
       } catch (e) { console.error(e); }
     }
     return INITIAL_POSTS;
   });
 
   const [events, setEvents] = useState<ReunionEvent[]>(() => {
+    const MOCK_EVENT_IDS = ['event-1', 'event-2'];
     const saved = localStorage.getItem('mn_school_events_v2');
     if (saved) {
       try { 
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(e => !MOCK_EVENT_IDS.includes(e.id));
+        }
       } catch (e) { console.error(e); }
     }
     return INITIAL_EVENTS;
@@ -194,11 +204,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const MOCK_IDS = ['user-chitron-bhattacharjee', 'user-nusrat-jahan', 'user-tanvir-hasan', 'user-farhana-akter', 'user-sakib-al-hasan'];
     const saved = localStorage.getItem('mn_school_current_user_v2');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed?.id) {
+        if (parsed?.id && !MOCK_IDS.includes(parsed.id)) {
           if (isAdminName(parsed.name)) {
             return { ...parsed, role: 'admin' as const, status: 'approved' as const };
           }
@@ -206,7 +217,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch (e) { console.error(e); }
     }
-    return INITIAL_USERS[2] || INITIAL_USERS[1]; // Default to Chitron Bhattacharjee or Onup Amir
+    // Clean default: visitor is not logged in unless they explicitly log in
+    return null;
   });
 
   // Check URL pathname for /admin on initial load
