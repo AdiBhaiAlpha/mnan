@@ -1,10 +1,10 @@
 {
-  "projectId": "black-book-65d42",
-  "appId": "1:199295305930:web:326061ea4e1b862a770c33",
-  "apiKey": "AIzaSyBB5_j-1pdo7mQYz-Er7GORztBzsOvdIas",
-  "authDomain": "black-book-65d42.firebaseapp.com",
+  "projectId": "shipu-ai",
+  "appId": "1:953122849300:web:f821f1a161ce7879001d01",
+  "apiKey": "AIzaSyBIuJFn74hJK1LT_Shcl-Y5DMgiOArB8Ps",
+  "authDomain": "shipu-ai.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
-  "storageBucket": "black-book-65d42.appspot.com",
-  "messagingSenderId": "199295305930",
-  "measurementId": "G-TSEL4EKEP1"
+  "storageBucket": "shipu-ai.firebasestorage.app",
+  "messagingSenderId": "953122849300",
+  "measurementId": "G-N2WMSS3MNG"
 }

@@ -12,20 +12,20 @@ import {
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBB5_j-1pdo7mQYz-Er7GORztBzsOvdIas",
-  authDomain: "black-book-65d42.firebaseapp.com",
-  databaseURL: "https://black-book-65d42-default-rtdb.firebaseio.com",
-  projectId: "black-book-65d42",
-  storageBucket: "black-book-65d42.appspot.com",
-  messagingSenderId: "199295305930",
-  appId: "1:199295305930:web:326061ea4e1b862a770c33",
-  measurementId: "G-TSEL4EKEP1"
+  apiKey: "AIzaSyBIuJFn74hJK1LT_Shcl-Y5DMgiOArB8Ps",
+  authDomain: "shipu-ai.firebaseapp.com",
+  databaseURL: "https://shipu-ai-default-rtdb.firebaseio.com",
+  projectId: "shipu-ai",
+  storageBucket: "shipu-ai.firebasestorage.app",
+  messagingSenderId: "953122849300",
+  appId: "1:953122849300:web:f821f1a161ce7879001d01",
+  measurementId: "G-N2WMSS3MNG"
 };
 
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore (single source of truth on black-book-65d42)
+// Initialize Cloud Firestore (single source of truth on shipu-ai)
 export const db = getFirestore(app);
 
 // Initialize Realtime Database

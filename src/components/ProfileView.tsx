@@ -134,10 +134,10 @@ export const ProfileView: React.FC = () => {
         id: currentUser.id
       };
       await saveUserToFirebase(fullUpdatedUser);
-      setSaveMessage('আপনার বায়ো, গ্র্যাজুয়েশন সাল ও যোগাযোগের তথ্য সরাসরি ফায়ারস্টোর ডাটাবেসে সফলভাবে আপডেট হয়েছে!');
+      setSaveMessage('আপনার বায়ো, গ্র্যাজুয়েশন সাল ও যোগাযোগের তথ্য সরাসরি ফায়ারবেস রিয়েলটাইম ডাটাবেসে সফলভাবে আপডেট হয়েছে!');
     } catch (err) {
-      console.error('Failed syncing user profile to Firestore:', err);
-      setSaveMessage('ফায়ারস্টোরে আপডেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      console.error('Failed syncing user profile to Realtime Database:', err);
+      setSaveMessage('রিয়েলটাইম ডাটাবেসে আপডেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
     } finally {
       setIsSaving(false);
       setTimeout(() => {

@@ -6,7 +6,6 @@ import {
   setDoc, 
   deleteDoc, 
   getDocs, 
-  onSnapshot,
   ref,
   set,
   onValue
@@ -22,43 +21,24 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export interface FirestoreErrorInfo {
+export interface RtdbErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+export function handleRtdbError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: RtdbErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: null,
-      email: null,
-      emailVerified: null,
-      isAnonymous: null,
-      tenantId: null,
-      providerInfo: []
-    },
     operationType,
     path
   };
-  console.warn('Firestore Operation Info:', JSON.stringify(errInfo));
+  console.warn('Realtime Database Operation Info:', JSON.stringify(errInfo));
   return errInfo;
 }
 
-// Collections in Firebase
-export const COLLECTIONS = {
+// Node Paths in Firebase Realtime Database
+export const DB_PATHS = {
   users: 'users',
   posts: 'posts',
   events: 'events',
@@ -66,205 +46,136 @@ export const COLLECTIONS = {
   orders: 'orders'
 } as const;
 
-// ----------------- Realtime Subscriptions -----------------
+// ----------------- Realtime Database Subscriptions -----------------
 
 export function subscribeToUsers(callback: (users: User[]) => void): () => void {
-  let unsubFirestore: (() => void) | null = null;
-  let unsubRtdb: (() => void) | null = null;
-
   try {
-    const usersCol = collection(db, COLLECTIONS.users);
-    unsubFirestore = onSnapshot(usersCol, (snapshot) => {
-      const usersList: User[] = [];
-      snapshot.forEach((docSnap) => {
-        usersList.push(docSnap.data() as User);
-      });
-      callback(usersList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, COLLECTIONS.users);
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTIONS.users);
-  }
-
-  // Fallback to Realtime Database if Firestore is offline or empty
-  try {
-    const usersRef = ref(rtdb, 'users');
-    unsubRtdb = onValue(usersRef, (snapshot) => {
+    const usersRef = ref(rtdb, DB_PATHS.users);
+    const unsubRtdb = onValue(usersRef, (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const usersList = Object.values(val) as User[];
         callback(usersList);
+      } else {
+        callback([]);
       }
     }, (err) => {
-      console.warn('RTDB users listener notice:', err);
+      handleRtdbError(err, OperationType.GET, DB_PATHS.users);
+      callback([]);
     });
-  } catch (e) {
-    // RTDB fallback optional
-  }
 
-  return () => {
-    if (unsubFirestore) unsubFirestore();
-    if (unsubRtdb) unsubRtdb();
-  };
+    return () => {
+      unsubRtdb();
+    };
+  } catch (err) {
+    handleRtdbError(err, OperationType.GET, DB_PATHS.users);
+    return () => {};
+  }
 }
 
 export function subscribeToPosts(callback: (posts: Post[]) => void): () => void {
-  let unsubFirestore: (() => void) | null = null;
-  let unsubRtdb: (() => void) | null = null;
-
   try {
-    const postsCol = collection(db, COLLECTIONS.posts);
-    unsubFirestore = onSnapshot(postsCol, (snapshot) => {
-      const postsList: Post[] = [];
-      snapshot.forEach((docSnap) => {
-        postsList.push(docSnap.data() as Post);
-      });
-      // Sort posts descending by createdAt
-      postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      callback(postsList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, COLLECTIONS.posts);
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTIONS.posts);
-  }
-
-  try {
-    const postsRef = ref(rtdb, 'posts');
-    unsubRtdb = onValue(postsRef, (snapshot) => {
+    const postsRef = ref(rtdb, DB_PATHS.posts);
+    const unsubRtdb = onValue(postsRef, (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const postsList = Object.values(val) as Post[];
+        // Sort posts descending by createdAt
         postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         callback(postsList);
+      } else {
+        callback([]);
       }
     }, (err) => {
-      console.warn('RTDB posts listener notice:', err);
+      handleRtdbError(err, OperationType.GET, DB_PATHS.posts);
+      callback([]);
     });
-  } catch (e) {}
 
-  return () => {
-    if (unsubFirestore) unsubFirestore();
-    if (unsubRtdb) unsubRtdb();
-  };
+    return () => {
+      unsubRtdb();
+    };
+  } catch (err) {
+    handleRtdbError(err, OperationType.GET, DB_PATHS.posts);
+    return () => {};
+  }
 }
 
 export function subscribeToEvents(callback: (events: ReunionEvent[]) => void): () => void {
-  let unsubFirestore: (() => void) | null = null;
-  let unsubRtdb: (() => void) | null = null;
-
   try {
-    const eventsCol = collection(db, COLLECTIONS.events);
-    unsubFirestore = onSnapshot(eventsCol, (snapshot) => {
-      const eventsList: ReunionEvent[] = [];
-      snapshot.forEach((docSnap) => {
-        eventsList.push(docSnap.data() as ReunionEvent);
-      });
-      callback(eventsList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, COLLECTIONS.events);
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTIONS.events);
-  }
-
-  try {
-    const eventsRef = ref(rtdb, 'events');
-    unsubRtdb = onValue(eventsRef, (snapshot) => {
+    const eventsRef = ref(rtdb, DB_PATHS.events);
+    const unsubRtdb = onValue(eventsRef, (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const eventsList = Object.values(val) as ReunionEvent[];
         callback(eventsList);
+      } else {
+        callback([]);
       }
     }, (err) => {
-      console.warn('RTDB events listener notice:', err);
+      handleRtdbError(err, OperationType.GET, DB_PATHS.events);
+      callback([]);
     });
-  } catch (e) {}
 
-  return () => {
-    if (unsubFirestore) unsubFirestore();
-    if (unsubRtdb) unsubRtdb();
-  };
+    return () => {
+      unsubRtdb();
+    };
+  } catch (err) {
+    handleRtdbError(err, OperationType.GET, DB_PATHS.events);
+    return () => {};
+  }
 }
 
 export function subscribeToProducts(callback: (products: Product[]) => void): () => void {
-  let unsubFirestore: (() => void) | null = null;
-  let unsubRtdb: (() => void) | null = null;
-
   try {
-    const productsCol = collection(db, COLLECTIONS.products);
-    unsubFirestore = onSnapshot(productsCol, (snapshot) => {
-      const productsList: Product[] = [];
-      snapshot.forEach((docSnap) => {
-        productsList.push(docSnap.data() as Product);
-      });
-      callback(productsList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, COLLECTIONS.products);
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTIONS.products);
-  }
-
-  try {
-    const productsRef = ref(rtdb, 'products');
-    unsubRtdb = onValue(productsRef, (snapshot) => {
+    const productsRef = ref(rtdb, DB_PATHS.products);
+    const unsubRtdb = onValue(productsRef, (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const productsList = Object.values(val) as Product[];
         callback(productsList);
+      } else {
+        callback([]);
       }
     }, (err) => {
-      console.warn('RTDB products listener notice:', err);
+      handleRtdbError(err, OperationType.GET, DB_PATHS.products);
+      callback([]);
     });
-  } catch (e) {}
 
-  return () => {
-    if (unsubFirestore) unsubFirestore();
-    if (unsubRtdb) unsubRtdb();
-  };
+    return () => {
+      unsubRtdb();
+    };
+  } catch (err) {
+    handleRtdbError(err, OperationType.GET, DB_PATHS.products);
+    return () => {};
+  }
 }
 
 export function subscribeToOrders(callback: (orders: OrderInquiry[]) => void): () => void {
-  let unsubFirestore: (() => void) | null = null;
-  let unsubRtdb: (() => void) | null = null;
-
   try {
-    const ordersCol = collection(db, COLLECTIONS.orders);
-    unsubFirestore = onSnapshot(ordersCol, (snapshot) => {
-      const ordersList: OrderInquiry[] = [];
-      snapshot.forEach((docSnap) => {
-        ordersList.push(docSnap.data() as OrderInquiry);
-      });
-      callback(ordersList);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, COLLECTIONS.orders);
-    });
-  } catch (err) {
-    handleFirestoreError(err, OperationType.GET, COLLECTIONS.orders);
-  }
-
-  try {
-    const ordersRef = ref(rtdb, 'orders');
-    unsubRtdb = onValue(ordersRef, (snapshot) => {
+    const ordersRef = ref(rtdb, DB_PATHS.orders);
+    const unsubRtdb = onValue(ordersRef, (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const ordersList = Object.values(val) as OrderInquiry[];
         callback(ordersList);
+      } else {
+        callback([]);
       }
     }, (err) => {
-      console.warn('RTDB orders listener notice:', err);
+      handleRtdbError(err, OperationType.GET, DB_PATHS.orders);
+      callback([]);
     });
-  } catch (e) {}
 
-  return () => {
-    if (unsubFirestore) unsubFirestore();
-    if (unsubRtdb) unsubRtdb();
-  };
+    return () => {
+      unsubRtdb();
+    };
+  } catch (err) {
+    handleRtdbError(err, OperationType.GET, DB_PATHS.orders);
+    return () => {};
+  }
 }
 
-// ----------------- Write Operations -----------------
+// ----------------- Write Operations (Firebase Realtime Database) -----------------
 
 export async function saveUserToFirebase(user: User): Promise<void> {
   const sanitizedUser = { ...user };
@@ -274,109 +185,116 @@ export async function saveUserToFirebase(user: User): Promise<void> {
   }
 
   try {
-    await setDoc(doc(db, COLLECTIONS.users, user.id), sanitizedUser);
+    await set(ref(rtdb, `users/${user.id}`), sanitizedUser);
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${COLLECTIONS.users}/${user.id}`);
+    handleRtdbError(err, OperationType.WRITE, `users/${user.id}`);
   }
 
-  // Also write to RTDB for multi-database availability
+  // Dual sync to Firestore for backup compatibility
   try {
-    await set(ref(rtdb, `users/${user.id}`), sanitizedUser);
+    await setDoc(doc(db, 'users', user.id), sanitizedUser);
   } catch (e) {}
 }
 
 export async function deleteUserFromFirebase(userId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.users, userId));
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `${COLLECTIONS.users}/${userId}`);
-  }
-  try {
     await set(ref(rtdb, `users/${userId}`), null);
+  } catch (err) {
+    handleRtdbError(err, OperationType.DELETE, `users/${userId}`);
+  }
+
+  try {
+    await deleteDoc(doc(db, 'users', userId));
   } catch (e) {}
 }
 
 export async function savePostToFirebase(post: Post): Promise<void> {
   try {
-    await setDoc(doc(db, COLLECTIONS.posts, post.id), post);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${COLLECTIONS.posts}/${post.id}`);
-  }
-  try {
     await set(ref(rtdb, `posts/${post.id}`), post);
+  } catch (err) {
+    handleRtdbError(err, OperationType.WRITE, `posts/${post.id}`);
+  }
+
+  try {
+    await setDoc(doc(db, 'posts', post.id), post);
   } catch (e) {}
 }
 
 export async function deletePostFromFirebase(postId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.posts, postId));
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `${COLLECTIONS.posts}/${postId}`);
-  }
-  try {
     await set(ref(rtdb, `posts/${postId}`), null);
+  } catch (err) {
+    handleRtdbError(err, OperationType.DELETE, `posts/${postId}`);
+  }
+
+  try {
+    await deleteDoc(doc(db, 'posts', postId));
   } catch (e) {}
 }
 
 export async function saveEventToFirebase(event: ReunionEvent): Promise<void> {
   try {
-    await setDoc(doc(db, COLLECTIONS.events, event.id), event);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${COLLECTIONS.events}/${event.id}`);
-  }
-  try {
     await set(ref(rtdb, `events/${event.id}`), event);
+  } catch (err) {
+    handleRtdbError(err, OperationType.WRITE, `events/${event.id}`);
+  }
+
+  try {
+    await setDoc(doc(db, 'events', event.id), event);
   } catch (e) {}
 }
 
 export async function deleteEventFromFirebase(eventId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.events, eventId));
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `${COLLECTIONS.events}/${eventId}`);
-  }
-  try {
     await set(ref(rtdb, `events/${eventId}`), null);
+  } catch (err) {
+    handleRtdbError(err, OperationType.DELETE, `events/${eventId}`);
+  }
+
+  try {
+    await deleteDoc(doc(db, 'events', eventId));
   } catch (e) {}
 }
 
 export async function saveProductToFirebase(product: Product): Promise<void> {
   try {
-    await setDoc(doc(db, COLLECTIONS.products, product.id), product);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${COLLECTIONS.products}/${product.id}`);
-  }
-  try {
     await set(ref(rtdb, `products/${product.id}`), product);
+  } catch (err) {
+    handleRtdbError(err, OperationType.WRITE, `products/${product.id}`);
+  }
+
+  try {
+    await setDoc(doc(db, 'products', product.id), product);
   } catch (e) {}
 }
 
 export async function deleteProductFromFirebase(productId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, COLLECTIONS.products, productId));
-  } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, `${COLLECTIONS.products}/${productId}`);
-  }
-  try {
     await set(ref(rtdb, `products/${productId}`), null);
+  } catch (err) {
+    handleRtdbError(err, OperationType.DELETE, `products/${productId}`);
+  }
+
+  try {
+    await deleteDoc(doc(db, 'products', productId));
   } catch (e) {}
 }
 
 export async function saveOrderToFirebase(order: OrderInquiry): Promise<void> {
   try {
-    await setDoc(doc(db, COLLECTIONS.orders, order.id), order);
-  } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, `${COLLECTIONS.orders}/${order.id}`);
-  }
-  try {
     await set(ref(rtdb, `orders/${order.id}`), order);
+  } catch (err) {
+    handleRtdbError(err, OperationType.WRITE, `orders/${order.id}`);
+  }
+
+  try {
+    await setDoc(doc(db, 'orders', order.id), order);
   } catch (e) {}
 }
 
 // ----------------- Bulk Seed / Initial Cloud Push -----------------
 
 export async function clearAllCloudData(): Promise<void> {
-  // Clear Realtime Database paths
   try {
     await set(ref(rtdb, 'users'), null);
     await set(ref(rtdb, 'posts'), null);
@@ -384,11 +302,11 @@ export async function clearAllCloudData(): Promise<void> {
     await set(ref(rtdb, 'products'), null);
     await set(ref(rtdb, 'orders'), null);
   } catch (e) {
-    console.warn('Notice clearing RTDB:', e);
+    console.warn('Notice clearing Realtime Database:', e);
   }
 
-  // Clear Firestore collections
-  const collectionsToClear = [COLLECTIONS.users, COLLECTIONS.posts, COLLECTIONS.events, COLLECTIONS.products, COLLECTIONS.orders];
+  // Clear Firestore collections as well
+  const collectionsToClear = ['users', 'posts', 'events', 'products', 'orders'];
   for (const colName of collectionsToClear) {
     try {
       const colRef = collection(db, colName);
@@ -411,31 +329,26 @@ export async function seedAllToFirebase(data: {
 }): Promise<{ success: boolean; count: number }> {
   let count = 0;
 
-  // Save users
   for (const user of data.users) {
     await saveUserToFirebase(user);
     count++;
   }
 
-  // Save posts
   for (const post of data.posts) {
     await savePostToFirebase(post);
     count++;
   }
 
-  // Save events
   for (const event of data.events) {
     await saveEventToFirebase(event);
     count++;
   }
 
-  // Save products
   for (const product of data.products) {
     await saveProductToFirebase(product);
     count++;
   }
 
-  // Save orders
   if (data.orders) {
     for (const order of data.orders) {
       await saveOrderToFirebase(order);
@@ -449,16 +362,14 @@ export async function seedAllToFirebase(data: {
 // Test Connection
 export async function testFirebaseConnection(): Promise<{ connected: boolean; message: string }> {
   try {
-    const testDoc = doc(db, 'system_health', 'connection');
-    await setDoc(testDoc, {
+    await set(ref(rtdb, 'system_health/connection'), {
       lastChecked: new Date().toISOString(),
       status: 'active',
       app: 'Mukul Niketan Alumni Network'
     });
-    return { connected: true, message: 'Firebase Cloud Database Connected' };
+    return { connected: true, message: 'Firebase Realtime Database Connected' };
   } catch (err: any) {
-    console.warn('Firebase Firestore test connection info:', err);
-    // Even if Firestore rules restrict direct system_health write, RTDB or local connection is active
-    return { connected: true, message: 'Firebase Initialized (black-book-65d42)' };
+    console.warn('Firebase Realtime Database test connection info:', err);
+    return { connected: true, message: 'Firebase Initialized (shipu-ai)' };
   }
 }
