@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { saveUserToFirebase } from '../services/firebaseDb';
+import { uploadImageToImgBB } from '../utils/imageUploader';
 import { User } from '../types';
 import { 
   ArrowLeft, 
@@ -22,7 +23,9 @@ import {
   X,
   Save,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  Camera,
+  Loader2
 } from 'lucide-react';
 
 export const ProfileView: React.FC = () => {
@@ -38,11 +41,21 @@ export const ProfileView: React.FC = () => {
   // Edit form modal state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isJustSaved, setIsJustSaved] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+
+  // Image Upload State
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [uploadToast, setUploadToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Form fields state
   const [formData, setFormData] = useState({
     name: profileUser?.name || '',
+    nickname: profileUser?.nickname || '',
+    schoolYears: profileUser?.schoolYears || '',
     shortBio: profileUser?.shortBio || '',
     batch: profileUser?.batch || 'SSC 2026',
     sscYear: profileUser?.sscYear || profileUser?.batch?.replace(/\D/g, '') || '2026',
@@ -63,6 +76,8 @@ export const ProfileView: React.FC = () => {
     if (profileUser) {
       setFormData({
         name: profileUser.name || '',
+        nickname: profileUser.nickname || '',
+        schoolYears: profileUser.schoolYears || '',
         shortBio: profileUser.shortBio || '',
         batch: profileUser.batch || 'SSC 2026',
         sscYear: profileUser.sscYear || profileUser.batch?.replace(/\D/g, '') || '2026',
@@ -95,7 +110,63 @@ export const ProfileView: React.FC = () => {
     );
   }
 
-  // Submit profile update handler (Directly syncs to Firestore UID document)
+  // Direct Image Upload Handler via ImgBB API & Sync to Realtime Database
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'profilePhoto' | 'coverPhoto') => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentUser || !profileUser) return;
+
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      setUploadToast({ text: 'অনুগ্রহ করে একটি ছবি ফাইল সিলেক্ট করুন (PNG, JPG, WEBP)।', type: 'error' });
+      return;
+    }
+
+    if (field === 'profilePhoto') setIsUploadingAvatar(true);
+    else setIsUploadingCover(true);
+
+    setUploadToast(null);
+
+    try {
+      // 1. Upload file via ImgBB API
+      const directUrl = await uploadImageToImgBB(file);
+      
+      const updatedUser: User = {
+        ...profileUser,
+        [field]: directUrl,
+        id: currentUser.id
+      };
+
+      // 2. Update local React state
+      updateProfile({ [field]: directUrl });
+
+      // 3. Save directly to Firebase Realtime Database
+      await saveUserToFirebase(updatedUser);
+
+      setUploadToast({
+        text: field === 'profilePhoto' 
+          ? 'প্রোফাইল ছবি ImgBB-তে আপলোড হয়ে রিয়েলটাইম ডাটাবেসে সেভ হয়েছে!' 
+          : 'কভার ফটো ImgBB-তে আপলোড হয়ে রিয়েলটাইম ডাটাবেসে সেভ হয়েছে!',
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+      setUploadToast({
+        text: err?.message || 'ছবি আপলোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।',
+        type: 'error'
+      });
+    } finally {
+      if (field === 'profilePhoto') setIsUploadingAvatar(false);
+      else setIsUploadingCover(false);
+
+      if (e.target) e.target.value = '';
+
+      setTimeout(() => {
+        setUploadToast(null);
+      }, 4000);
+    }
+  };
+
+  // Submit profile update handler (Directly syncs to Realtime Database UID document)
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
@@ -105,6 +176,8 @@ export const ProfileView: React.FC = () => {
 
     const updatedData: Partial<User> = {
       name: formData.name.trim(),
+      nickname: formData.nickname.trim(),
+      schoolYears: formData.schoolYears.trim(),
       shortBio: formData.shortBio.trim(),
       batch: formData.batch.trim(),
       sscYear: formData.sscYear.trim(),
@@ -123,32 +196,60 @@ export const ProfileView: React.FC = () => {
       }
     };
 
-    // Update global React context
+    // Update global React context immediately
     updateProfile(updatedData);
 
-    // Save directly to Firestore collection document identified by Auth UID
+    const fullUpdatedUser: User = {
+      ...profileUser,
+      ...updatedData,
+      id: currentUser.id
+    };
+
+    // Guarantee fast save feedback (around 800ms saving state then transition to green saved state)
     try {
-      const fullUpdatedUser: User = {
-        ...profileUser,
-        ...updatedData,
-        id: currentUser.id
-      };
-      await saveUserToFirebase(fullUpdatedUser);
-      setSaveMessage('আপনার বায়ো, গ্র্যাজুয়েশন সাল ও যোগাযোগের তথ্য সরাসরি ফায়ারবেস রিয়েলটাইম ডাটাবেসে সফলভাবে আপডেট হয়েছে!');
-    } catch (err) {
-      console.error('Failed syncing user profile to Realtime Database:', err);
-      setSaveMessage('রিয়েলটাইম ডাটাবেসে আপডেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
-    } finally {
+      const saveTask = saveUserToFirebase(fullUpdatedUser);
+      const minDelay = new Promise(res => setTimeout(res, 800));
+      await Promise.all([saveTask, minDelay]);
+
       setIsSaving(false);
+      setIsJustSaved(true);
+      setSaveMessage('আপনার তথ্য সফলভাবে সেভ হয়েছে!');
+      setUploadToast({
+        text: 'আপনার প্রোফাইল তথ্য সফলভাবে সেভ হয়েছে!',
+        type: 'success'
+      });
+
+      // Show green saved confirmation button & banner for 2 seconds before closing modal
       setTimeout(() => {
+        setIsJustSaved(false);
         setIsEditingProfile(false);
         setSaveMessage('');
-      }, 1500);
+      }, 2000);
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      setIsSaving(false);
+      setSaveMessage('সেভ করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      setUploadToast({
+        text: 'সেভ করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+        type: 'error'
+      });
     }
   };
 
   return (
-    <div id="individual-profile-page" className="max-w-4xl mx-auto space-y-6 pb-16">
+    <div id="individual-profile-page" className="max-w-4xl mx-auto space-y-6 pb-16 relative">
+      {/* Toast alert notification for image upload status */}
+      {uploadToast && (
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2.5 border animate-in fade-in slide-in-from-bottom-4 duration-200 ${
+          uploadToast.type === 'success' 
+            ? 'bg-slate-900 text-white border-emerald-500/50 shadow-emerald-950/20' 
+            : 'bg-rose-950 text-white border-rose-500/50 shadow-rose-950/20'
+        }`}>
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{uploadToast.text}</span>
+        </div>
+      )}
+
       {/* Navigation breadcrumb */}
       <button
         id="back-to-directory-btn"
@@ -160,25 +261,79 @@ export const ProfileView: React.FC = () => {
       </button>
 
       {/* Main Profile Header Card */}
-      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs">
-        {/* Cover Photo Banner */}
+      <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs relative">
+        {/* Cover Photo Banner with Bottom-Right Upload Button */}
         <div 
-          className="h-44 sm:h-56 bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-900 relative bg-cover bg-center"
+          className="h-44 sm:h-56 bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-900 relative bg-cover bg-center group"
           style={profileUser.coverPhoto ? { backgroundImage: `url(${profileUser.coverPhoto})` } : undefined}
         >
           <div className="absolute inset-0 bg-black/20" />
           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
+
+          {/* Cover Photo Upload Button on Bottom Right Corner */}
+          {isOwnProfile && (
+            <div className="absolute bottom-3 right-3 z-10">
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={isUploadingCover}
+                title="কভার ছবি আপডেট করুন"
+                className="px-3 py-1.5 bg-black/60 hover:bg-black/80 text-white rounded-xl text-xs font-bold backdrop-blur-md border border-white/30 shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 hover:scale-105"
+              >
+                {isUploadingCover ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                ) : (
+                  <Camera className="w-4 h-4 text-amber-300" />
+                )}
+                <span className="hidden sm:inline">কভার ছবি পরিবর্তন</span>
+              </button>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e, 'coverPhoto')}
+                className="hidden"
+              />
+            </div>
+          )}
         </div>
 
         {/* Profile Avatar & Primary Info */}
         <div className="px-6 sm:px-10 pb-8 relative pt-0">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-16 sm:-mt-20 mb-6 gap-4">
-            <div className="relative">
+            {/* Profile Avatar Container with Bottom-Right Camera Icon */}
+            <div className="relative group self-start sm:self-auto">
               <img
                 src={profileUser.profilePhoto}
                 alt={profileUser.name}
                 className="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl sm:rounded-3xl object-cover border-4 border-white shadow-lg bg-white"
               />
+
+              {/* Profile Photo Camera Upload Icon Button on Bottom Right Corner */}
+              {isOwnProfile && (
+                <div className="absolute bottom-1 right-1 z-10">
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    title="প্রোফাইল ছবি আপডেট করুন"
+                    className="p-2 sm:p-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl shadow-xl border-2 border-white transition flex items-center justify-center cursor-pointer disabled:opacity-50 hover:scale-110 active:scale-95"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                    ) : (
+                      <Camera className="w-4 h-4 text-amber-300" />
+                    )}
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'profilePhoto')}
+                    className="hidden"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -199,8 +354,11 @@ export const ProfileView: React.FC = () => {
           {/* Names & Taglines */}
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-                {profileUser.name}
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 flex items-center gap-2">
+                <span>{profileUser.name}</span>
+                {profileUser.nickname && (
+                  <span className="text-base sm:text-lg font-normal text-slate-500">({profileUser.nickname})</span>
+                )}
               </h1>
               {profileUser.bloodGroup && (
                 <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-xs border border-rose-200 flex items-center gap-1">
@@ -336,11 +494,6 @@ export const ProfileView: React.FC = () => {
               <span className="font-semibold text-slate-800">{profileUser.sscYear || profileUser.batch.replace(/\D/g, '') || '২০২৬'}</span>
             </div>
 
-            <div className="flex justify-between py-1.5 border-b border-slate-50">
-              <span className="text-slate-500 font-medium">শ্রেণি ও শাখা</span>
-              <span className="font-semibold text-slate-800">{profileUser.classSection || 'N/A'}</span>
-            </div>
-
             {profileUser.rollNumber && (
               <div className="flex justify-between py-1.5 border-b border-slate-50">
                 <span className="text-slate-500 font-medium">রোল নম্বর / স্টুডেন্ট আইডি</span>
@@ -425,7 +578,7 @@ export const ProfileView: React.FC = () => {
             <div className="bg-gradient-to-r from-blue-950 to-blue-900 px-6 py-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Edit3 className="w-5 h-5 text-amber-300" />
-                <h2 className="text-lg font-bold">প্রোফাইল তথ্য আপডেট ও ক্লাউড ফায়ারস্টোর সিঙ্ক</h2>
+                <h2 className="text-lg font-bold">প্রোফাইল তথ্য আপডেট</h2>
               </div>
               <button
                 onClick={() => setIsEditingProfile(false)}
@@ -444,50 +597,96 @@ export const ProfileView: React.FC = () => {
                 </div>
               )}
 
-              {/* SECTION 1: Bio */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-slate-800">
-                  সংক্ষিপ্ত বায়ো (Bio)
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.shortBio}
-                  onChange={e => setFormData({ ...formData, shortBio: e.target.value })}
-                  placeholder="আপনার কাজের ক্ষেত্র, লক্ষ্য ও নিজের সম্পর্কে সংক্ষেপে লিখুন..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
-                />
-              </div>
+              {/* SECTION 1: Name, Nickname & Bio */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-slate-800">
+                      সম্পূর্ণ নাম (Full Name)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="আপনার নাম লিখুন..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
 
-              {/* SECTION 2: SSC Graduation Year & Batch */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-bold text-slate-800">
-                    এসএসসি পাসের বছর (Graduation Year)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.sscYear}
-                    onChange={e => setFormData({ 
-                      ...formData, 
-                      sscYear: e.target.value,
-                      batch: `SSC ${e.target.value}`
-                    })}
-                    placeholder="2026"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
-                  />
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-slate-800">
+                      ডাকনাম (Nickname)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nickname}
+                      onChange={e => setFormData({ ...formData, nickname: e.target.value })}
+                      placeholder="আপনার ডাকনাম (ঐচ্ছিক)..."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="block text-sm font-bold text-slate-800">
-                    এসএসসি ব্যাচের নাম (SSC Batch)
+                    সংক্ষিপ্ত বায়ো (Bio)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.shortBio}
+                    onChange={e => setFormData({ ...formData, shortBio: e.target.value })}
+                    placeholder="আপনার কাজের ক্ষেত্র, লক্ষ্য ও নিজের সম্পর্কে সংক্ষেপে লিখুন..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 2: SSC Graduation Year, Batch & School Years */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-slate-800">
+                      এসএসসি পাসের বছর (Graduation Year)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.sscYear}
+                      onChange={e => setFormData({ 
+                        ...formData, 
+                        sscYear: e.target.value,
+                        batch: `SSC ${e.target.value}`
+                      })}
+                      placeholder="2026"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-bold text-slate-800">
+                      এসএসসি ব্যাচের নাম (SSC Batch)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.batch}
+                      onChange={e => setFormData({ ...formData, batch: e.target.value })}
+                      placeholder="SSC 2026"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-slate-800">
+                    অধ্যয়নের সময়কাল (School Years)
                   </label>
                   <input
                     type="text"
-                    required
-                    value={formData.batch}
-                    onChange={e => setFormData({ ...formData, batch: e.target.value })}
-                    placeholder="SSC 2026"
+                    value={formData.schoolYears}
+                    onChange={e => setFormData({ ...formData, schoolYears: e.target.value })}
+                    placeholder="উদাহরণ: ২০১৬ – ২০২৬ বা 1995 – 2005"
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
                   />
                 </div>
@@ -633,15 +832,27 @@ export const ProfileView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+                  disabled={isSaving || isJustSaved}
+                  className={`px-6 py-2.5 text-white text-sm font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer ${
+                    isJustSaved 
+                      ? 'bg-emerald-600 hover:bg-emerald-700' 
+                      : 'bg-blue-900 hover:bg-blue-800 disabled:opacity-50'
+                  }`}
                 >
                   {isSaving ? (
-                    <span>ফায়ারস্টোরে সেভ হচ্ছে...</span>
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                      <span>সেভ হচ্ছে...</span>
+                    </>
+                  ) : isJustSaved ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-white" />
+                      <span>সেভ হয়েছে!</span>
+                    </>
                   ) : (
                     <>
                       <Save className="w-4 h-4 text-amber-300" />
-                      <span>ফায়ারস্টোরে সেভ করুন</span>
+                      <span>সেভ করুন</span>
                     </>
                   )}
                 </button>

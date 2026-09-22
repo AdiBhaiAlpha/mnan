@@ -73,6 +73,21 @@ export function subscribeToUsers(callback: (users: User[]) => void): () => void 
   }
 }
 
+function deduplicateComments(comments: any[]): any[] {
+  if (!Array.isArray(comments)) return [];
+  const seen = new Set();
+  const result: any[] = [];
+  for (const c of comments) {
+    if (!c) continue;
+    const key = c.id || `${c.authorId}-${c.content}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(c);
+    }
+  }
+  return result;
+}
+
 export function subscribeToPosts(callback: (posts: Post[]) => void): () => void {
   try {
     const postsRef = ref(rtdb, DB_PATHS.posts);
@@ -80,9 +95,30 @@ export function subscribeToPosts(callback: (posts: Post[]) => void): () => void 
       const val = snapshot.val();
       if (val) {
         const postsList = Object.values(val) as Post[];
-        // Sort posts descending by createdAt
-        postsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(postsList);
+        
+        // Ensure likes & comments are always deduplicated arrays
+        const sanitizedPosts = postsList.map((p: any) => {
+          const rawComments = Array.isArray(p.comments) 
+            ? p.comments 
+            : (p.comments ? Object.values(p.comments) : []);
+          return {
+            ...p,
+            likes: Array.isArray(p.likes) 
+              ? Array.from(new Set(p.likes))
+              : (p.likes ? Array.from(new Set(Object.values(p.likes))) : []),
+            comments: deduplicateComments(rawComments)
+          };
+        });
+
+        // Sort posts descending by numeric timestamp in post ID or date time
+        sanitizedPosts.sort((a, b) => {
+          const numA = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+          const numB = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+          if (numA && numB && numA !== numB) return numB - numA;
+          return (b.id || '').localeCompare(a.id || '');
+        });
+
+        callback(sanitizedPosts);
       } else {
         callback([]);
       }
@@ -107,7 +143,13 @@ export function subscribeToEvents(callback: (events: ReunionEvent[]) => void): (
       const val = snapshot.val();
       if (val) {
         const eventsList = Object.values(val) as ReunionEvent[];
-        callback(eventsList);
+        const sanitizedEvents = eventsList.map((e: any) => ({
+          ...e,
+          rsvps: Array.isArray(e.rsvps) 
+            ? e.rsvps 
+            : (e.rsvps ? Object.values(e.rsvps) : [])
+        }));
+        callback(sanitizedEvents);
       } else {
         callback([]);
       }
@@ -175,24 +217,36 @@ export function subscribeToOrders(callback: (orders: OrderInquiry[]) => void): (
   }
 }
 
+// Helper to strip undefined values before saving to Realtime Database
+function sanitizeForRtdb<T>(obj: T): T {
+  if (!obj) return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
 // ----------------- Write Operations (Firebase Realtime Database) -----------------
 
 export async function saveUserToFirebase(user: User): Promise<void> {
-  const sanitizedUser = { ...user };
+  const sanitizedUser = sanitizeForRtdb({ ...user });
   if (isAdminName(sanitizedUser.name)) {
     sanitizedUser.role = 'admin';
     sanitizedUser.status = 'approved';
   }
 
+  const withTimeout = (promise: Promise<any>, ms: number = 1800) => 
+    Promise.race([
+      promise,
+      new Promise((res) => setTimeout(res, ms))
+    ]);
+
   try {
-    await set(ref(rtdb, `users/${user.id}`), sanitizedUser);
+    await withTimeout(set(ref(rtdb, `users/${user.id}`), sanitizedUser), 1800);
   } catch (err) {
     handleRtdbError(err, OperationType.WRITE, `users/${user.id}`);
   }
 
   // Dual sync to Firestore for backup compatibility
   try {
-    await setDoc(doc(db, 'users', user.id), sanitizedUser);
+    await withTimeout(setDoc(doc(db, 'users', user.id), sanitizedUser), 1200);
   } catch (e) {}
 }
 
@@ -209,14 +263,20 @@ export async function deleteUserFromFirebase(userId: string): Promise<void> {
 }
 
 export async function savePostToFirebase(post: Post): Promise<void> {
+  const sanitizedPost = sanitizeForRtdb({
+    ...post,
+    likes: Array.from(new Set(post.likes || [])),
+    comments: deduplicateComments(post.comments || [])
+  });
+
   try {
-    await set(ref(rtdb, `posts/${post.id}`), post);
+    await set(ref(rtdb, `posts/${post.id}`), sanitizedPost);
   } catch (err) {
     handleRtdbError(err, OperationType.WRITE, `posts/${post.id}`);
   }
 
   try {
-    await setDoc(doc(db, 'posts', post.id), post);
+    await setDoc(doc(db, 'posts', post.id), sanitizedPost);
   } catch (e) {}
 }
 
@@ -233,14 +293,19 @@ export async function deletePostFromFirebase(postId: string): Promise<void> {
 }
 
 export async function saveEventToFirebase(event: ReunionEvent): Promise<void> {
+  const sanitizedEvent = sanitizeForRtdb({
+    ...event,
+    rsvps: event.rsvps || []
+  });
+
   try {
-    await set(ref(rtdb, `events/${event.id}`), event);
+    await set(ref(rtdb, `events/${event.id}`), sanitizedEvent);
   } catch (err) {
     handleRtdbError(err, OperationType.WRITE, `events/${event.id}`);
   }
 
   try {
-    await setDoc(doc(db, 'events', event.id), event);
+    await setDoc(doc(db, 'events', event.id), sanitizedEvent);
   } catch (e) {}
 }
 
@@ -257,14 +322,15 @@ export async function deleteEventFromFirebase(eventId: string): Promise<void> {
 }
 
 export async function saveProductToFirebase(product: Product): Promise<void> {
+  const sanitizedProduct = sanitizeForRtdb({ ...product });
   try {
-    await set(ref(rtdb, `products/${product.id}`), product);
+    await set(ref(rtdb, `products/${product.id}`), sanitizedProduct);
   } catch (err) {
     handleRtdbError(err, OperationType.WRITE, `products/${product.id}`);
   }
 
   try {
-    await setDoc(doc(db, 'products', product.id), product);
+    await setDoc(doc(db, 'products', product.id), sanitizedProduct);
   } catch (e) {}
 }
 
@@ -281,14 +347,15 @@ export async function deleteProductFromFirebase(productId: string): Promise<void
 }
 
 export async function saveOrderToFirebase(order: OrderInquiry): Promise<void> {
+  const sanitizedOrder = sanitizeForRtdb({ ...order });
   try {
-    await set(ref(rtdb, `orders/${order.id}`), order);
+    await set(ref(rtdb, `orders/${order.id}`), sanitizedOrder);
   } catch (err) {
     handleRtdbError(err, OperationType.WRITE, `orders/${order.id}`);
   }
 
   try {
-    await setDoc(doc(db, 'orders', order.id), order);
+    await setDoc(doc(db, 'orders', order.id), sanitizedOrder);
   } catch (e) {}
 }
 

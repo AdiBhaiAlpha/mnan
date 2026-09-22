@@ -280,14 +280,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDbSyncStatus('synced');
     });
 
-    // 2. Subscribe to Posts
+    // 2. Subscribe to Posts (Firebase Realtime Database live listener)
     const unsubPosts = subscribeToPosts((cloudPosts) => {
-      setPosts(cloudPosts || []);
+      if (cloudPosts && cloudPosts.length > 0) {
+        setPosts(cloudPosts);
+      } else {
+        // Auto-seed initial sample posts to Realtime Database on first load
+        INITIAL_POSTS.forEach(p => savePostToFirebase(p).catch(() => {}));
+        setPosts(INITIAL_POSTS);
+      }
     });
 
-    // 3. Subscribe to Events
+    // 3. Subscribe to Events (Firebase Realtime Database live listener)
     const unsubEvents = subscribeToEvents((cloudEvents) => {
-      setEvents(cloudEvents || []);
+      if (cloudEvents && cloudEvents.length > 0) {
+        setEvents(cloudEvents);
+      } else {
+        INITIAL_EVENTS.forEach(e => saveEventToFirebase(e).catch(() => {}));
+        setEvents(INITIAL_EVENTS);
+      }
     });
 
     // 4. Subscribe to Products
@@ -774,27 +785,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleLike = (postId: string) => {
     if (!currentUser) return;
-    setPosts(prev => {
-      const updated = prev.map(p => {
-        if (p.id === postId) {
-          const hasLiked = p.likes.includes(currentUser.id);
-          const updatedLikes = hasLiked
-            ? p.likes.filter(id => id !== currentUser.id)
-            : [...p.likes, currentUser.id];
-          return { ...p, likes: updatedLikes };
-        }
-        return p;
-      });
-      const target = updated.find(p => p.id === postId);
-      if (target) savePostToFirebase(target);
-      return updated;
-    });
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const hasLiked = (targetPost.likes || []).includes(currentUser.id);
+    const updatedLikes = hasLiked
+      ? (targetPost.likes || []).filter(id => id !== currentUser.id)
+      : [...(targetPost.likes || []), currentUser.id];
+
+    const updatedPost = { ...targetPost, likes: updatedLikes };
+    setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+    savePostToFirebase(updatedPost);
   };
 
   const addComment = (postId: string, content: string) => {
     if (!currentUser || !content.trim()) return;
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
     const newComment = {
-      id: `comm-${Date.now()}`,
+      id: `comm-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       authorId: currentUser.id,
       authorName: currentUser.name,
       authorAvatar: currentUser.profilePhoto,
@@ -803,31 +813,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: 'Just now'
     };
 
-    setPosts(prev => {
-      const updated = prev.map(p => {
-        if (p.id === postId) {
-          return { ...p, comments: [...p.comments, newComment] };
-        }
-        return p;
-      });
-      const target = updated.find(p => p.id === postId);
-      if (target) savePostToFirebase(target);
-      return updated;
-    });
+    const existingComments = targetPost.comments || [];
+    // Ensure no duplicate comments with exact same author & content are added
+    if (existingComments.some(c => c.authorId === currentUser.id && c.content === content.trim() && c.createdAt === 'Just now')) {
+      return;
+    }
+
+    const updatedComments = [...existingComments, newComment];
+    const updatedPost = { ...targetPost, comments: updatedComments };
+
+    setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+    savePostToFirebase(updatedPost);
   };
 
   const deleteComment = (postId: string, commentId: string) => {
-    setPosts(prev => {
-      const updated = prev.map(p => {
-        if (p.id === postId) {
-          return { ...p, comments: p.comments.filter(c => c.id !== commentId) };
-        }
-        return p;
-      });
-      const target = updated.find(p => p.id === postId);
-      if (target) savePostToFirebase(target);
-      return updated;
-    });
+    const targetPost = posts.find(p => p.id === postId);
+    if (!targetPost) return;
+
+    const updatedComments = (targetPost.comments || []).filter(c => c.id !== commentId);
+    const updatedPost = { ...targetPost, comments: updatedComments };
+
+    setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+    savePostToFirebase(updatedPost);
   };
 
   const deletePost = (postId: string) => {
