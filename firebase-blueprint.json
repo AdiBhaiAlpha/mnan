@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "User": {
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "email": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": false },
+        "batch": { "type": "string", "required": true },
+        "role": { "type": "string", "required": true },
+        "status": { "type": "string", "required": true }
+      }
+    },
+    "Post": {
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "content": { "type": "string", "required": true },
+        "authorId": { "type": "string", "required": true },
+        "createdAt": { "type": "string", "required": true }
+      }
+    },
+    "ReunionEvent": {
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "title": { "type": "string", "required": true }
+      }
+    },
+    "Product": {
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "price": { "type": "number", "required": true }
+      }
+    },
+    "OrderInquiry": {
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "customerName": { "type": "string", "required": true },
+        "status": { "type": "string", "required": true }
+      }
+    }
+  }
+}

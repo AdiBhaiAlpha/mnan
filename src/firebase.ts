@@ -10,6 +10,7 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
+import firebaseConfigJson from '../firebase-applet-config.json';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyBB5_j-1pdo7mQYz-Er7GORztBzsOvdIas",
@@ -25,10 +26,14 @@ export const firebaseConfig = {
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore
-export const db = getFirestore(app);
+// Initialize Cloud Firestore with database ID handling
+const customDbId = firebaseConfigJson?.firestoreDatabaseId || 'ai-studio-mukulniketonreun-c15b3339-137c-443a-95ea-20e391b1ae08';
 
-// Initialize Realtime Database (using user provided databaseURL)
+export const db = (customDbId && customDbId !== '(default)')
+  ? getFirestore(app, customDbId)
+  : getFirestore(app);
+
+// Initialize Realtime Database
 export const rtdb = getDatabase(app);
 
 // Export Firestore primitives for application use
@@ -44,4 +49,3 @@ export {
   set,
   onValue
 };
-

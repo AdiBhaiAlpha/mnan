@@ -122,102 +122,29 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Clean persistence loaders
-  const [users, setUsers] = useState<User[]>(() => {
-    // If mock data cleanup has been performed, purge old mock users (like chitron, tanvir, etc.)
-    const MOCK_IDS = ['user-chitron-bhattacharjee', 'user-nusrat-jahan', 'user-tanvir-hasan', 'user-farhana-akter', 'user-sakib-al-hasan'];
-    const saved = localStorage.getItem('mn_school_users_v2');
-    let loadedUsers: User[] = INITIAL_USERS;
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Remove any mock demo accounts from local storage
-          loadedUsers = parsed.filter(u => !MOCK_IDS.includes(u.id));
-        }
-      } catch (e) { console.error(e); }
-    }
+  // Direct state initialized with initial defaults (no stale local storage overrides)
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [events, setEvents] = useState<ReunionEvent[]>(INITIAL_EVENTS);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [orderInquiries, setOrderInquiries] = useState<OrderInquiry[]>([]);
 
-    // Ensure Chowdhury Onup Amir admin user is included
-    const hasOnupAmir = loadedUsers.some(u => isAdminName(u.name) || u.email?.toLowerCase() === 'chowdhuryonupamir@gmail.com');
-    if (!hasOnupAmir) {
-      const defaultOnup = INITIAL_USERS.find(u => u.id === 'user-chowdhury-onup-amir');
-      if (defaultOnup) {
-        loadedUsers = [defaultOnup, ...loadedUsers];
-      }
-    }
-
-    // Automatically enforce admin role and approved status for any user with name "Chowdhury Onup Amir"
-    return loadedUsers.map(u => {
-      if (isAdminName(u.name)) {
-        return { ...u, role: 'admin' as const, status: 'approved' as const };
-      }
-      return u;
-    });
-  });
-
-  const [posts, setPosts] = useState<Post[]>(() => {
-    const MOCK_POST_IDS = ['post-1', 'post-2', 'post-3'];
-    const saved = localStorage.getItem('mn_school_posts_v2');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(p => !MOCK_POST_IDS.includes(p.id));
-        }
-      } catch (e) { console.error(e); }
-    }
-    return INITIAL_POSTS;
-  });
-
-  const [events, setEvents] = useState<ReunionEvent[]>(() => {
-    const MOCK_EVENT_IDS = ['event-1', 'event-2'];
-    const saved = localStorage.getItem('mn_school_events_v2');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(e => !MOCK_EVENT_IDS.includes(e.id));
-        }
-      } catch (e) { console.error(e); }
-    }
-    return INITIAL_EVENTS;
-  });
-
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('mn_school_products_v2');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) { console.error(e); }
-    }
-    return INITIAL_PRODUCTS;
-  });
-
-  const [orderInquiries, setOrderInquiries] = useState<OrderInquiry[]>(() => {
-    const saved = localStorage.getItem('mn_school_orders_v2');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error(e); }
-    }
-    return [];
-  });
-
+  // Current session user (persisted in session storage for login status)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const MOCK_IDS = ['user-chitron-bhattacharjee', 'user-nusrat-jahan', 'user-tanvir-hasan', 'user-farhana-akter', 'user-sakib-al-hasan'];
-    const saved = localStorage.getItem('mn_school_current_user_v2');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed?.id && !MOCK_IDS.includes(parsed.id)) {
-          if (isAdminName(parsed.name)) {
-            return { ...parsed, role: 'admin' as const, status: 'approved' as const };
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('mn_school_current_user_v3') || localStorage.getItem('mn_school_current_user_v2');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed?.id) {
+            if (isAdminName(parsed.name)) {
+              return { ...parsed, role: 'admin' as const, status: 'approved' as const };
+            }
+            return parsed;
           }
-          return parsed;
-        }
-      } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); }
+      }
     }
-    // Clean default: visitor is not logged in unless they explicitly log in
     return null;
   });
 
@@ -332,50 +259,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Subscribe to Users
     const unsubUsers = subscribeToUsers((cloudUsers) => {
-      if (cloudUsers && cloudUsers.length > 0) {
-        let processedUsers = cloudUsers.map((u: User) => {
-          if (isAdminName(u.name)) {
-            return { ...u, role: 'admin' as const, status: 'approved' as const };
-          }
-          return u;
-        });
-        setUsers(processedUsers);
-        localStorage.setItem('mn_school_users_v2', JSON.stringify(processedUsers));
+      let processedUsers = (cloudUsers || []).map((u: User) => {
+        if (isAdminName(u.name)) {
+          return { ...u, role: 'admin' as const, status: 'approved' as const };
+        }
+        return u;
+      });
+
+      // Ensure Chowdhury Onup Amir admin account is preserved if missing from cloud DB
+      const hasOnupAmir = processedUsers.some(u => isAdminName(u.name) || u.email?.toLowerCase() === 'chowdhuryonupamir@gmail.com');
+      if (!hasOnupAmir && INITIAL_USERS[0]) {
+        processedUsers = [INITIAL_USERS[0], ...processedUsers];
       }
+
+      setUsers(processedUsers);
       setIsDbLoaded(true);
       setDbSyncStatus('synced');
     });
 
     // 2. Subscribe to Posts
     const unsubPosts = subscribeToPosts((cloudPosts) => {
-      if (cloudPosts && cloudPosts.length > 0) {
-        setPosts(cloudPosts);
-        localStorage.setItem('mn_school_posts_v2', JSON.stringify(cloudPosts));
-      }
+      setPosts(cloudPosts || []);
     });
 
     // 3. Subscribe to Events
     const unsubEvents = subscribeToEvents((cloudEvents) => {
-      if (cloudEvents && cloudEvents.length > 0) {
-        setEvents(cloudEvents);
-        localStorage.setItem('mn_school_events_v2', JSON.stringify(cloudEvents));
-      }
+      setEvents(cloudEvents || []);
     });
 
     // 4. Subscribe to Products
     const unsubProducts = subscribeToProducts((cloudProducts) => {
-      if (cloudProducts && cloudProducts.length > 0) {
-        setProducts(cloudProducts);
-        localStorage.setItem('mn_school_products_v2', JSON.stringify(cloudProducts));
-      }
+      setProducts(cloudProducts || []);
     });
 
     // 5. Subscribe to Orders
     const unsubOrders = subscribeToOrders((cloudOrders) => {
-      if (cloudOrders) {
-        setOrderInquiries(cloudOrders);
-        localStorage.setItem('mn_school_orders_v2', JSON.stringify(cloudOrders));
-      }
+      setOrderInquiries(cloudOrders || []);
     });
 
     const timer = setTimeout(() => {
@@ -392,27 +311,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubOrders();
     };
   }, []);
-
-  // Sync to local cache as immediate fallback
-  useEffect(() => {
-    localStorage.setItem('mn_school_users_v2', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem('mn_school_posts_v2', JSON.stringify(posts));
-  }, [posts]);
-
-  useEffect(() => {
-    localStorage.setItem('mn_school_events_v2', JSON.stringify(events));
-  }, [events]);
-
-  useEffect(() => {
-    localStorage.setItem('mn_school_products_v2', JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('mn_school_orders_v2', JSON.stringify(orderInquiries));
-  }, [orderInquiries]);
 
   // Seed or re-upload local data to Firebase
   const seedFirebaseData = async () => {
@@ -552,9 +450,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       location: data.location?.trim() || 'Mymensingh, Bangladesh',
       profilePhoto: defaultAvatar,
       role: isSuperAdmin ? 'admin' : 'student',
-      status: isSuperAdmin ? 'approved' : 'pending',
+      status: 'approved',
       joinedDate: new Date().toISOString().split('T')[0],
-      showEmailPhone: isSuperAdmin,
+      showEmailPhone: true,
     };
 
     setUsers(prev => [newUser, ...prev]);
