@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { saveUserToFirebase } from '../services/firebaseDb';
+import { User } from '../types';
 import { 
   ArrowLeft, 
-  Sparkles, 
   MapPin, 
-  Calendar, 
   Briefcase, 
   BookOpen, 
   Shield, 
@@ -14,23 +14,71 @@ import {
   Linkedin, 
   Github, 
   Instagram,
-  Clock,
   Heart,
-  UserCheck,
   GraduationCap,
-  Building2,
   Phone,
   Mail,
-  MessageCircle
+  MessageCircle,
+  X,
+  Save,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 
 export const ProfileView: React.FC = () => {
-  const { selectedProfileId, users, currentUser, setActiveTab } = useApp();
+  const { selectedProfileId, users, currentUser, setActiveTab, updateProfile } = useApp();
 
   // Find user by selectedProfileId, or default to first student, or currentUser
   const profileUser = users.find(u => u.id === selectedProfileId) || 
                       users.find(u => u.role === 'student' && u.status === 'approved') || 
                       currentUser;
+
+  const isOwnProfile = Boolean(currentUser && profileUser && currentUser.id === profileUser.id);
+
+  // Edit form modal state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // Form fields state
+  const [formData, setFormData] = useState({
+    name: profileUser?.name || '',
+    shortBio: profileUser?.shortBio || '',
+    batch: profileUser?.batch || 'SSC 2026',
+    sscYear: profileUser?.sscYear || profileUser?.batch?.replace(/\D/g, '') || '2026',
+    phone: profileUser?.phone || '',
+    email: profileUser?.email || '',
+    location: profileUser?.location || '',
+    currentOccupation: profileUser?.currentOccupation || '',
+    organization: profileUser?.organization || '',
+    higherEducation: profileUser?.higherEducation || '',
+    facebook: profileUser?.socialLinks?.facebook || '',
+    whatsapp: profileUser?.socialLinks?.whatsapp || '',
+    linkedin: profileUser?.socialLinks?.linkedin || '',
+    showEmailPhone: profileUser?.showEmailPhone ?? true,
+  });
+
+  // Sync form state whenever active profile user changes
+  useEffect(() => {
+    if (profileUser) {
+      setFormData({
+        name: profileUser.name || '',
+        shortBio: profileUser.shortBio || '',
+        batch: profileUser.batch || 'SSC 2026',
+        sscYear: profileUser.sscYear || profileUser.batch?.replace(/\D/g, '') || '2026',
+        phone: profileUser.phone || '',
+        email: profileUser.email || '',
+        location: profileUser.location || '',
+        currentOccupation: profileUser.currentOccupation || '',
+        organization: profileUser.organization || '',
+        higherEducation: profileUser.higherEducation || '',
+        facebook: profileUser.socialLinks?.facebook || '',
+        whatsapp: profileUser.socialLinks?.whatsapp || '',
+        linkedin: profileUser.socialLinks?.linkedin || '',
+        showEmailPhone: profileUser.showEmailPhone ?? true,
+      });
+    }
+  }, [profileUser]);
 
   if (!profileUser) {
     return (
@@ -39,7 +87,7 @@ export const ProfileView: React.FC = () => {
         <p className="text-slate-500 text-sm">আপনি যে শিক্ষার্থীর প্রোফাইল খুঁজছেন তা খুঁজে পাওয়া যায়নি বা বিদ্যমান নেই।</p>
         <button
           onClick={() => setActiveTab('students')}
-          className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-semibold"
+          className="px-4 py-2 bg-blue-900 text-white rounded-lg text-sm font-semibold cursor-pointer"
         >
           প্রাক্তন শিক্ষার্থী তালিকায় ফিরে যান
         </button>
@@ -47,7 +95,57 @@ export const ProfileView: React.FC = () => {
     );
   }
 
-  const isOwnProfile = currentUser?.id === profileUser.id;
+  // Submit profile update handler (Directly syncs to Firestore UID document)
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+
+    setIsSaving(true);
+    setSaveMessage('');
+
+    const updatedData: Partial<User> = {
+      name: formData.name.trim(),
+      shortBio: formData.shortBio.trim(),
+      batch: formData.batch.trim(),
+      sscYear: formData.sscYear.trim(),
+      phone: formData.phone.trim(),
+      email: formData.email.trim(),
+      location: formData.location.trim(),
+      currentOccupation: formData.currentOccupation.trim(),
+      organization: formData.organization.trim(),
+      higherEducation: formData.higherEducation.trim(),
+      showEmailPhone: formData.showEmailPhone,
+      socialLinks: {
+        ...(profileUser.socialLinks || {}),
+        facebook: formData.facebook.trim(),
+        whatsapp: formData.whatsapp.trim(),
+        linkedin: formData.linkedin.trim(),
+      }
+    };
+
+    // Update global React context
+    updateProfile(updatedData);
+
+    // Save directly to Firestore collection document identified by Auth UID
+    try {
+      const fullUpdatedUser: User = {
+        ...profileUser,
+        ...updatedData,
+        id: currentUser.id
+      };
+      await saveUserToFirebase(fullUpdatedUser);
+      setSaveMessage('আপনার বায়ো, গ্র্যাজুয়েশন সাল ও যোগাযোগের তথ্য সরাসরি ফায়ারস্টোর ডাটাবেসে সফলভাবে আপডেট হয়েছে!');
+    } catch (err) {
+      console.error('Failed syncing user profile to Firestore:', err);
+      setSaveMessage('ফায়ারস্টোরে আপডেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => {
+        setIsEditingProfile(false);
+        setSaveMessage('');
+      }, 1500);
+    }
+  };
 
   return (
     <div id="individual-profile-page" className="max-w-4xl mx-auto space-y-6 pb-16">
@@ -55,7 +153,7 @@ export const ProfileView: React.FC = () => {
       <button
         id="back-to-directory-btn"
         onClick={() => setActiveTab('students')}
-        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-900 transition"
+        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-900 transition cursor-pointer"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>প্রাক্তন শিক্ষার্থী তালিকায় ফিরে যান</span>
@@ -88,8 +186,8 @@ export const ProfileView: React.FC = () => {
               {isOwnProfile && (
                 <button
                   id="edit-my-profile-btn"
-                  onClick={() => setActiveTab('dashboard')}
-                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-xs transition flex items-center gap-2"
+                  onClick={() => setIsEditingProfile(true)}
+                  className="px-5 py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-sm font-bold shadow-xs transition flex items-center gap-2 cursor-pointer"
                 >
                   <Edit3 className="w-4 h-4 text-amber-300" />
                   <span>প্রোফাইল সম্পাদনা</span>
@@ -234,7 +332,7 @@ export const ProfileView: React.FC = () => {
             </div>
 
             <div className="flex justify-between py-1.5 border-b border-slate-50">
-              <span className="text-slate-500 font-medium">এসএসসি বছর</span>
+              <span className="text-slate-500 font-medium">এসএসসি পাসের বছর</span>
               <span className="font-semibold text-slate-800">{profileUser.sscYear || profileUser.batch.replace(/\D/g, '') || '২০২৬'}</span>
             </div>
 
@@ -274,7 +372,7 @@ export const ProfileView: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-slate-900 font-bold text-base pb-2 border-b border-slate-100">
               <Briefcase className="w-5 h-5 text-blue-900" />
-              <span>বর্তমান অবস্থান, পেশা ও উচ্চশিক্ষা</span>
+              <span>বর্তমান অবস্থান, পেশা ও যোগাযোগ</span>
             </div>
 
             <div className="space-y-3 text-sm">
@@ -304,7 +402,7 @@ export const ProfileView: React.FC = () => {
             </div>
           </div>
 
-          {/* Privacy Note as mandated in blueprint */}
+          {/* Privacy Note */}
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-slate-700">
               <Shield className="w-3.5 h-3.5 text-emerald-600" />
@@ -318,6 +416,240 @@ export const ProfileView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* EDIT PROFILE FORM MODAL */}
+      {isEditingProfile && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-950 to-blue-900 px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Edit3 className="w-5 h-5 text-amber-300" />
+                <h2 className="text-lg font-bold">প্রোফাইল তথ্য আপডেট ও ক্লাউড ফায়ারস্টোর সিঙ্ক</h2>
+              </div>
+              <button
+                onClick={() => setIsEditingProfile(false)}
+                className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveProfile} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+              {saveMessage && (
+                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>{saveMessage}</span>
+                </div>
+              )}
+
+              {/* SECTION 1: Bio */}
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-800">
+                  সংক্ষিপ্ত বায়ো (Bio)
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.shortBio}
+                  onChange={e => setFormData({ ...formData, shortBio: e.target.value })}
+                  placeholder="আপনার কাজের ক্ষেত্র, লক্ষ্য ও নিজের সম্পর্কে সংক্ষেপে লিখুন..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                />
+              </div>
+
+              {/* SECTION 2: SSC Graduation Year & Batch */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-slate-800">
+                    এসএসসি পাসের বছর (Graduation Year)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.sscYear}
+                    onChange={e => setFormData({ 
+                      ...formData, 
+                      sscYear: e.target.value,
+                      batch: `SSC ${e.target.value}`
+                    })}
+                    placeholder="2026"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-bold text-slate-800">
+                    এসএসসি ব্যাচের নাম (SSC Batch)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.batch}
+                    onChange={e => setFormData({ ...formData, batch: e.target.value })}
+                    placeholder="SSC 2026"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 3: Contact Information */}
+              <div className="border-t border-slate-100 pt-4 space-y-4">
+                <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>যোগাযোগের তথ্য (Contact Information)</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      মোবাইল নম্বর (Phone)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.phone}
+                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="017xxxxxxxx"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      ইমেইল ঠিকানা (Email)
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="student@example.com"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    বর্তমান বাসস্থান (Location)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="ময়মনসিংহ, বাংলাদেশ"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* SECTION 4: Career & Engagement */}
+              <div className="border-t border-slate-100 pt-4 space-y-4">
+                <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>পেশা ও সামাজিক যোগাযোগ (Career & Socials)</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      বর্তমান পেশা / পদবি
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.currentOccupation}
+                      onChange={e => setFormData({ ...formData, currentOccupation: e.target.value })}
+                      placeholder="Software Engineer / Student"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      প্রতিষ্ঠান / কোম্পানি / ইউনিভার্সিটি
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.organization}
+                      onChange={e => setFormData({ ...formData, organization: e.target.value })}
+                      placeholder="Mukul Niketon High School / BUET / Co."
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      হোয়াটসঅ্যাপ নম্বর (WhatsApp)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.whatsapp}
+                      onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
+                      placeholder="+88017xxxxxxxx"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      ফেসবুক প্রোফাইল লিংক (Facebook URL)
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.facebook}
+                      onChange={e => setFormData({ ...formData, facebook: e.target.value })}
+                      placeholder="https://facebook.com/yourprofile"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-900 text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 5: Privacy Settings */}
+              <div className="border-t border-slate-100 pt-4">
+                <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={formData.showEmailPhone}
+                    onChange={e => setFormData({ ...formData, showEmailPhone: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-slate-800 block">সাজানো ডিরেক্টরিতে ইমেইল ও ফোন নম্বর প্রদর্শন করুন</span>
+                    <span className="text-slate-500">অন্যান্য প্রাক্তনী শিক্ষার্থীরা যাতে আপনার সাথে সরাসরি যোগাযোগ করতে পারে।</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingProfile(false)}
+                  className="px-5 py-2.5 text-slate-600 hover:text-slate-900 text-sm font-semibold rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                >
+                  বাতিল করুন
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 bg-blue-900 hover:bg-blue-800 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
+                >
+                  {isSaving ? (
+                    <span>ফায়ারস্টোরে সেভ হচ্ছে...</span>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 text-amber-300" />
+                      <span>ফায়ারস্টোরে সেভ করুন</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

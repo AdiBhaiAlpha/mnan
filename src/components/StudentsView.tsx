@@ -87,9 +87,9 @@ export const StudentsView: React.FC = () => {
     }, 550);
   };
 
-  // Filter approved students
+  // Filter active registered alumni and members
   const approvedStudents = useMemo(() => {
-    return users.filter(u => u.role === 'student' && u.status === 'approved');
+    return users.filter(u => u.status !== 'suspended');
   }, [users]);
 
   // Dynamic calculation: 1970 to current year
