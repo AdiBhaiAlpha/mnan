@@ -266,10 +266,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return u;
       });
 
-      // Ensure Chowdhury Onup Amir admin account is preserved if missing from cloud DB
+      // Ensure Chowdhury Onup Amir admin account is preserved and auto-seeded if missing from cloud DB
       const hasOnupAmir = processedUsers.some(u => isAdminName(u.name) || u.email?.toLowerCase() === 'chowdhuryonupamir@gmail.com');
       if (!hasOnupAmir && INITIAL_USERS[0]) {
         processedUsers = [INITIAL_USERS[0], ...processedUsers];
+        saveUserToFirebase(INITIAL_USERS[0]).catch(err => console.warn('Auto-seed notice:', err));
+      } else if (cloudUsers.length === 0 && INITIAL_USERS[0]) {
+        saveUserToFirebase(INITIAL_USERS[0]).catch(err => console.warn('Auto-seed notice:', err));
       }
 
       setUsers(processedUsers);

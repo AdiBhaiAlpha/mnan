@@ -690,12 +690,6 @@ export const StudentsView: React.FC = () => {
                       <span>শাখার সকল সদস্য দেখুন</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => setExpandedBranch(isExpanded ? null : batchYear)}
-                      className="text-xs text-slate-500 hover:text-slate-800 font-medium underline cursor-pointer"
-                    >
-                      {isExpanded ? 'সংক্ষেপ করুন' : 'তালিকাতালিকা বিস্তারিত'}
-                    </button>
                   </div>
 
                   {/* Accordion Expanded Preview in Branch */}
