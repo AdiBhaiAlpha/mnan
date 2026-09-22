@@ -73,6 +73,10 @@ export const AdminView: React.FC = () => {
     resetAllData,
     isDbLoaded,
     dbSyncStatus,
+    firebaseSyncStatus,
+    firebaseProject,
+    seedFirebaseData,
+    refreshFromFirebase,
     refreshFromDatabase
   } = useApp();
 
@@ -558,7 +562,7 @@ export const AdminView: React.FC = () => {
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>JSON Database</span>
+            <span>Firebase Database</span>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               <span className="text-[10px] text-slate-300 uppercase font-mono">live</span>
@@ -1558,24 +1562,24 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= TAB 5: LOCAL JSON DATABASE ================= */}
+      {/* ================= TAB 5: FIREBASE CLOUD DATABASE ================= */}
       {operatorTab === 'database' && (
         <div id="admin-database-view" className="space-y-6">
           {/* Top Control Card */}
           <div className="bg-white p-6 rounded-none border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Database className="w-5 h-5 text-emerald-600" />
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Database className="w-5 h-5 text-amber-500" />
                 <h3 className="text-lg font-black text-slate-900">
-                  লোকাল JSON ফাইল ডাটাবেস ইঞ্জিন (Local JSON Database)
+                  ফায়ারবেস ক্লাউড ডাটাবেস ইঞ্জিন (Firebase Cloud Database)
                 </h3>
                 <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-none bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Active & Synced</span>
+                  <span>{firebaseSyncStatus === 'connected' ? 'Firebase Live & Connected' : 'Cloud Synced'}</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-                অ্যাপের সকল তথ্য (ব্যবহারকারী, পোস্ট, ইভেন্ট, মার্চেন্ডাইজ ও অর্ডার) সার্ভারের <code className="px-1 py-0.5 bg-slate-100 text-slate-800 font-mono text-[11px]">/data/*.json</code> ফাইলগুলোতে স্বয়ংক্রিয়ভাবে সংরক্ষিত ও পরিচালিত হচ্ছে।
+                অ্যাপের সকল তথ্য (ব্যবহারকারী, পোস্ট, ইভেন্ট, মার্চেন্ডাইজ ও অর্ডার) গুগল ফায়ারবেস ক্লাউড প্রজেক্ট <code className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[11px] font-bold">{firebaseProject || 'black-book-65d42'}</code>-এ রিয়েলটাইমে সংরক্ষিত ও সিঙ্ক হচ্ছে।
               </p>
             </div>
 
@@ -1583,46 +1587,34 @@ export const AdminView: React.FC = () => {
               <button
                 id="btn-refresh-db"
                 onClick={async () => {
-                  await refreshFromDatabase();
+                  await refreshFromFirebase();
                 }}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-none text-xs font-bold transition flex items-center gap-1.5 border border-slate-300"
-                title="সার্ভার JSON ফাইল থেকে সর্বশেষ ডাটা রিফ্রেশ করুন"
+                title="ফায়ারবেস থেকে সর্বশেষ ডাটা রিফ্রেশ করুন"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${dbSyncStatus === 'syncing' ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
                 <span>রিফ্রেশ / সিঙ্ক</span>
               </button>
 
               <button
-                id="btn-force-sync-db"
+                id="btn-seed-firebase"
                 onClick={async () => {
-                  try {
-                    await fetch('/api/db/sync/batch', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        users,
-                        posts,
-                        events,
-                        products,
-                        orders: orderInquiries
-                      })
-                    });
-                    alert('সবগুলো লোকাল JSON ফাইলে বর্তমান ডাটা সফলভাবে সংরক্ষণ করা হয়েছে!');
-                  } catch (e) {
-                    alert('সিঙ্ক করতে সমস্যা হয়েছে');
+                  if (confirm('বর্তমান সমস্ত তথ্য ফায়ারবেস ক্লাউড ডাটাবেসে আপলোড/সিড করতে চান?')) {
+                    await seedFirebaseData();
+                    alert('ফায়ারবেসে ডাটা সফলভাবে সিঙ্ক ও সংরক্ষিত হয়েছে!');
                   }
                 }}
-                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-none text-xs font-bold transition flex items-center gap-1.5"
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-none text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
               >
                 <Server className="w-3.5 h-3.5" />
-                <span>সব ফাইল সেভ করুন</span>
+                <span>ফায়ারবেসে ডাটা সিড/আপলোড</span>
               </button>
             </div>
           </div>
 
           {/* Database File Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            {/* 1. users.json */}
+            {/* 1. users */}
             <div 
               onClick={() => setSelectedJsonFile('users')}
               className={`p-4 rounded-none border transition cursor-pointer ${
@@ -1634,14 +1626,14 @@ export const AdminView: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <FileJson className="w-4 h-4 text-blue-600" />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-blue-100 text-blue-800 font-bold">
-                  {users.length} records
+                  {users.length} docs
                 </span>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 font-mono">data/users.json</h4>
-              <p className="text-[11px] text-slate-500 mt-1">প্রাক্তন শিক্ষার্থী ও অ্যাডমিন অ্যাকাউন্ট</p>
+              <h4 className="text-xs font-bold text-slate-900 font-mono">firebase/users</h4>
+              <p className="text-[11px] text-slate-500 mt-1">প্রাক্তন শিক্ষার্থী ও অ্যাডমিন প্রোফাইল</p>
             </div>
 
-            {/* 2. posts.json */}
+            {/* 2. posts */}
             <div 
               onClick={() => setSelectedJsonFile('posts')}
               className={`p-4 rounded-none border transition cursor-pointer ${
@@ -1653,14 +1645,14 @@ export const AdminView: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <FileJson className="w-4 h-4 text-purple-600" />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-purple-100 text-purple-800 font-bold">
-                  {posts.length} records
+                  {posts.length} docs
                 </span>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 font-mono">data/posts.json</h4>
-              <p className="text-[11px] text-slate-500 mt-1">আলাপ পোস্ট, লাইক ও মন্তব্য</p>
+              <h4 className="text-xs font-bold text-slate-900 font-mono">firebase/posts</h4>
+              <p className="text-[11px] text-slate-500 mt-1">কমিউনিটি পোস্ট, লাইক ও কমেন্ট</p>
             </div>
 
-            {/* 3. events.json */}
+            {/* 3. events */}
             <div 
               onClick={() => setSelectedJsonFile('events')}
               className={`p-4 rounded-none border transition cursor-pointer ${
@@ -1672,14 +1664,14 @@ export const AdminView: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <FileJson className="w-4 h-4 text-amber-600" />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-100 text-amber-800 font-bold">
-                  {events.length} records
+                  {events.length} docs
                 </span>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 font-mono">data/events.json</h4>
+              <h4 className="text-xs font-bold text-slate-900 font-mono">firebase/events</h4>
               <p className="text-[11px] text-slate-500 mt-1">রিইউনিয়ন ও ইভেন্ট বুকিং ডাটা</p>
             </div>
 
-            {/* 4. products.json */}
+            {/* 4. products */}
             <div 
               onClick={() => setSelectedJsonFile('products')}
               className={`p-4 rounded-none border transition cursor-pointer ${
@@ -1691,14 +1683,14 @@ export const AdminView: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <FileJson className="w-4 h-4 text-emerald-600" />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold">
-                  {products.length} records
+                  {products.length} docs
                 </span>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 font-mono">data/products.json</h4>
-              <p className="text-[11px] text-slate-500 mt-1">অফিসিয়াল মার্চেন্ডাইজ ক্যাটালগ</p>
+              <h4 className="text-xs font-bold text-slate-900 font-mono">firebase/products</h4>
+              <p className="text-[11px] text-slate-500 mt-1">স্মারক ও স্যুভেনির মার্চেন্ডাইজ</p>
             </div>
 
-            {/* 5. orders.json */}
+            {/* 5. orders */}
             <div 
               onClick={() => setSelectedJsonFile('orders')}
               className={`p-4 rounded-none border transition cursor-pointer ${
@@ -1710,27 +1702,27 @@ export const AdminView: React.FC = () => {
               <div className="flex items-center justify-between mb-2">
                 <FileJson className="w-4 h-4 text-rose-600" />
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-rose-100 text-rose-800 font-bold">
-                  {orderInquiries.length} records
+                  {orderInquiries.length} docs
                 </span>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 font-mono">data/orders.json</h4>
+              <h4 className="text-xs font-bold text-slate-900 font-mono">firebase/orders</h4>
               <p className="text-[11px] text-slate-500 mt-1">অর্ডার ইনকোয়ারি ও রিকোয়েস্ট</p>
             </div>
           </div>
 
-          {/* Live JSON Inspector Card */}
+          {/* Live Firebase Inspector Card */}
           <div className="bg-white rounded-none border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Code className="w-4 h-4 text-amber-400" />
                 <span className="text-xs font-bold tracking-wide font-mono">
-                  data/{selectedJsonFile}.json
+                  firebase/{selectedJsonFile}
                 </span>
                 <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-mono">
                   {selectedJsonFile === 'users' ? users.length :
                    selectedJsonFile === 'posts' ? posts.length :
                    selectedJsonFile === 'events' ? events.length :
-                   selectedJsonFile === 'products' ? products.length : orderInquiries.length} টি এন্ট্রি
+                   selectedJsonFile === 'products' ? products.length : orderInquiries.length} টি রেকর্ড (Firebase Synced)
                 </span>
               </div>
 
@@ -1771,13 +1763,13 @@ export const AdminView: React.FC = () => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${selectedJsonFile}.json`;
+                    a.download = `firebase-${selectedJsonFile}.json`;
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
                   className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-none text-xs font-bold transition flex items-center gap-1.5"
                 >
-                  <span>Download .json</span>
+                  <span>Download Backup</span>
                 </button>
               </div>
             </div>

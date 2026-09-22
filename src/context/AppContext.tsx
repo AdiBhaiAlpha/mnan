@@ -1,6 +1,25 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Post, ReunionEvent, Product, OrderInquiry, ActiveTab, UserStatus, isAdminName } from '../types';
 import { INITIAL_USERS, INITIAL_POSTS, INITIAL_EVENTS, INITIAL_PRODUCTS } from '../data/initialData';
+import { 
+  subscribeToUsers, 
+  subscribeToPosts, 
+  subscribeToEvents, 
+  subscribeToProducts, 
+  subscribeToOrders,
+  saveUserToFirebase,
+  deleteUserFromFirebase,
+  savePostToFirebase,
+  deletePostFromFirebase,
+  saveEventToFirebase,
+  deleteEventFromFirebase,
+  saveProductToFirebase,
+  deleteProductFromFirebase,
+  saveOrderToFirebase,
+  seedAllToFirebase,
+  testFirebaseConnection
+} from '../services/firebaseDb';
+import { firebaseConfig } from '../firebase';
 
 interface AppContextType {
   users: User[];
@@ -89,9 +108,13 @@ interface AppContextType {
   updateOrderStatus: (orderId: string, status: OrderInquiry['status']) => void;
   resetAllData: () => void;
 
-  // Local JSON Database Synchronization
+  // Firebase Cloud Database Synchronization
   isDbLoaded: boolean;
   dbSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  firebaseSyncStatus: 'connected' | 'syncing' | 'synced' | 'error';
+  firebaseProject: string;
+  seedFirebaseData: () => Promise<void>;
+  refreshFromFirebase: () => Promise<void>;
   refreshFromDatabase: () => Promise<void>;
 }
 
@@ -273,117 +296,145 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Local JSON Database Synchronization state
+  // Firebase Cloud Database Synchronization state
   const [isDbLoaded, setIsDbLoaded] = useState<boolean>(false);
   const [dbSyncStatus, setDbSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'connected' | 'syncing' | 'synced' | 'error'>('connected');
+  const firebaseProject = firebaseConfig.projectId;
 
-  // Load from server JSON database on initial mount
-  const refreshFromDatabase = async () => {
-    try {
-      setDbSyncStatus('syncing');
-      const res = await fetch('/api/db/all');
-      if (res.ok) {
-        const result = await res.json();
-        if (result.success && result.data) {
-          const { users: dbUsers, posts: dbPosts, events: dbEvents, products: dbProducts, orders: dbOrders } = result.data;
-          
-          if (Array.isArray(dbUsers) && dbUsers.length > 0) {
-            let processedUsers = dbUsers;
-            // Always ensure Chowdhury Onup Amir is an admin
-            processedUsers = processedUsers.map((u: User) => {
-              if (isAdminName(u.name)) {
-                return { ...u, role: 'admin' as const, status: 'approved' as const };
-              }
-              return u;
-            });
-            setUsers(processedUsers);
-          }
-
-          if (Array.isArray(dbPosts) && dbPosts.length > 0) {
-            setPosts(dbPosts);
-          }
-
-          if (Array.isArray(dbEvents) && dbEvents.length > 0) {
-            setEvents(dbEvents);
-          }
-
-          if (Array.isArray(dbProducts) && dbProducts.length > 0) {
-            setProducts(dbProducts);
-          }
-
-          if (Array.isArray(dbOrders)) {
-            setOrderInquiries(dbOrders);
-          }
-          setDbSyncStatus('synced');
-        }
-      }
-    } catch (err) {
-      console.warn('Could not connect to JSON database, falling back to cached state:', err);
-      setDbSyncStatus('error');
-    } finally {
-      setIsDbLoaded(true);
-    }
-  };
-
+  // Real-time Firebase listeners
   useEffect(() => {
-    refreshFromDatabase();
+    setDbSyncStatus('syncing');
+    setFirebaseSyncStatus('syncing');
+
+    // Test Firebase connection
+    testFirebaseConnection()
+      .then(res => {
+        if (res.connected) {
+          setFirebaseSyncStatus('connected');
+        }
+      })
+      .catch(() => {
+        setFirebaseSyncStatus('error');
+      });
+
+    // 1. Subscribe to Users
+    const unsubUsers = subscribeToUsers((cloudUsers) => {
+      if (cloudUsers && cloudUsers.length > 0) {
+        let processedUsers = cloudUsers.map((u: User) => {
+          if (isAdminName(u.name)) {
+            return { ...u, role: 'admin' as const, status: 'approved' as const };
+          }
+          return u;
+        });
+        setUsers(processedUsers);
+        localStorage.setItem('mn_school_users_v2', JSON.stringify(processedUsers));
+      }
+      setIsDbLoaded(true);
+      setDbSyncStatus('synced');
+    });
+
+    // 2. Subscribe to Posts
+    const unsubPosts = subscribeToPosts((cloudPosts) => {
+      if (cloudPosts && cloudPosts.length > 0) {
+        setPosts(cloudPosts);
+        localStorage.setItem('mn_school_posts_v2', JSON.stringify(cloudPosts));
+      }
+    });
+
+    // 3. Subscribe to Events
+    const unsubEvents = subscribeToEvents((cloudEvents) => {
+      if (cloudEvents && cloudEvents.length > 0) {
+        setEvents(cloudEvents);
+        localStorage.setItem('mn_school_events_v2', JSON.stringify(cloudEvents));
+      }
+    });
+
+    // 4. Subscribe to Products
+    const unsubProducts = subscribeToProducts((cloudProducts) => {
+      if (cloudProducts && cloudProducts.length > 0) {
+        setProducts(cloudProducts);
+        localStorage.setItem('mn_school_products_v2', JSON.stringify(cloudProducts));
+      }
+    });
+
+    // 5. Subscribe to Orders
+    const unsubOrders = subscribeToOrders((cloudOrders) => {
+      if (cloudOrders) {
+        setOrderInquiries(cloudOrders);
+        localStorage.setItem('mn_school_orders_v2', JSON.stringify(cloudOrders));
+      }
+    });
+
+    const timer = setTimeout(() => {
+      setIsDbLoaded(true);
+      setDbSyncStatus('synced');
+    }, 1500);
+
+    return () => {
+      clearTimeout(timer);
+      unsubUsers();
+      unsubPosts();
+      unsubEvents();
+      unsubProducts();
+      unsubOrders();
+    };
   }, []);
 
-  // Sync state to localStorage AND local server JSON database files
+  // Sync to local cache as immediate fallback
   useEffect(() => {
     localStorage.setItem('mn_school_users_v2', JSON.stringify(users));
-    if (isDbLoaded) {
-      fetch('/api/db/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(users)
-      }).catch(err => console.error('Failed writing to users.json:', err));
-    }
-  }, [users, isDbLoaded]);
+  }, [users]);
 
   useEffect(() => {
     localStorage.setItem('mn_school_posts_v2', JSON.stringify(posts));
-    if (isDbLoaded) {
-      fetch('/api/db/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(posts)
-      }).catch(err => console.error('Failed writing to posts.json:', err));
-    }
-  }, [posts, isDbLoaded]);
+  }, [posts]);
 
   useEffect(() => {
     localStorage.setItem('mn_school_events_v2', JSON.stringify(events));
-    if (isDbLoaded) {
-      fetch('/api/db/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(events)
-      }).catch(err => console.error('Failed writing to events.json:', err));
-    }
-  }, [events, isDbLoaded]);
+  }, [events]);
 
   useEffect(() => {
     localStorage.setItem('mn_school_products_v2', JSON.stringify(products));
-    if (isDbLoaded) {
-      fetch('/api/db/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(products)
-      }).catch(err => console.error('Failed writing to products.json:', err));
-    }
-  }, [products, isDbLoaded]);
+  }, [products]);
 
   useEffect(() => {
     localStorage.setItem('mn_school_orders_v2', JSON.stringify(orderInquiries));
-    if (isDbLoaded) {
-      fetch('/api/db/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderInquiries)
-      }).catch(err => console.error('Failed writing to orders.json:', err));
+  }, [orderInquiries]);
+
+  // Seed or re-upload local data to Firebase
+  const seedFirebaseData = async () => {
+    setDbSyncStatus('syncing');
+    setFirebaseSyncStatus('syncing');
+    try {
+      await seedAllToFirebase({
+        users,
+        posts,
+        events,
+        products,
+        orders: orderInquiries
+      });
+      setDbSyncStatus('synced');
+      setFirebaseSyncStatus('synced');
+    } catch (err) {
+      console.error('Failed seeding to Firebase:', err);
+      setDbSyncStatus('error');
+      setFirebaseSyncStatus('error');
     }
-  }, [orderInquiries, isDbLoaded]);
+  };
+
+  const refreshFromFirebase = async () => {
+    setDbSyncStatus('syncing');
+    try {
+      await testFirebaseConnection();
+      setDbSyncStatus('synced');
+      setFirebaseSyncStatus('connected');
+    } catch (e) {
+      setDbSyncStatus('error');
+    }
+  };
+
+  const refreshFromDatabase = refreshFromFirebase;
 
   useEffect(() => {
     if (currentUser) {
@@ -496,6 +547,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setUsers(prev => [newUser, ...prev]);
     setCurrentUser(newUser);
+    saveUserToFirebase(newUser);
+
     if (isSuperAdmin) {
       setIsAdminAuthenticated(true);
       if (typeof window !== 'undefined') {
@@ -520,14 +573,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateProfile = (updatedData: Partial<User>) => {
     if (!currentUser) return;
-    setUsers(prev => prev.map(u => {
-      if (u.id === currentUser.id) {
-        const updated = { ...u, ...updatedData };
-        setCurrentUser(updated);
-        return updated;
-      }
-      return u;
-    }));
+    const updated = { ...currentUser, ...updatedData };
+    setCurrentUser(updated);
+    setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+    saveUserToFirebase(updated);
   };
 
   const changePassword = (_newPass: string) => {
@@ -627,27 +676,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ---------------- ADMIN ACTIONS ----------------
 
   const approveUser = (userId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'approved' } : u));
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, status: 'approved' as const } : u);
+      const target = updated.find(u => u.id === userId);
+      if (target) saveUserToFirebase(target);
+      return updated;
+    });
   };
 
   const rejectUser = (userId: string) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
+    deleteUserFromFirebase(userId);
   };
 
   const suspendUser = (userId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'suspended' } : u));
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, status: 'suspended' as const } : u);
+      const target = updated.find(u => u.id === userId);
+      if (target) saveUserToFirebase(target);
+      return updated;
+    });
   };
 
   const activateUser = (userId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'approved' } : u));
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, status: 'approved' as const } : u);
+      const target = updated.find(u => u.id === userId);
+      if (target) saveUserToFirebase(target);
+      return updated;
+    });
   };
 
   const deleteUser = (userId: string) => {
     setUsers(prev => prev.filter(u => u.id !== userId));
+    deleteUserFromFirebase(userId);
   };
 
   const editUserByAdmin = (userId: string, data: Partial<User>) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
+    setUsers(prev => {
+      const updated = prev.map(u => u.id === userId ? { ...u, ...data } : u);
+      const target = updated.find(u => u.id === userId);
+      if (target) saveUserToFirebase(target);
+      return updated;
+    });
   };
 
   const createStudentByAdmin = (data: {
@@ -687,6 +758,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setUsers(prev => [newUser, ...prev]);
+    saveUserToFirebase(newUser);
     return { success: true, message: 'Alumni member added successfully to directory.', user: newUser };
   };
 
@@ -729,6 +801,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
 
       setEvents(prev => [newEvent, ...prev]);
+      saveEventToFirebase(newEvent);
 
       eventInfo = {
         title: newEvent.title,
@@ -754,6 +827,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setPosts(prev => [newPost, ...prev]);
+    savePostToFirebase(newPost);
+
     return { 
       success: true, 
       message: createdEventId 
@@ -779,21 +854,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setPosts(prev => [newPost, ...prev]);
+    savePostToFirebase(newPost);
+
     return { success: true, message: 'Official announcement published to the community feed!' };
   };
 
   const toggleLike = (postId: string) => {
     if (!currentUser) return;
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        const hasLiked = p.likes.includes(currentUser.id);
-        const updatedLikes = hasLiked
-          ? p.likes.filter(id => id !== currentUser.id)
-          : [...p.likes, currentUser.id];
-        return { ...p, likes: updatedLikes };
-      }
-      return p;
-    }));
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          const hasLiked = p.likes.includes(currentUser.id);
+          const updatedLikes = hasLiked
+            ? p.likes.filter(id => id !== currentUser.id)
+            : [...p.likes, currentUser.id];
+          return { ...p, likes: updatedLikes };
+        }
+        return p;
+      });
+      const target = updated.find(p => p.id === postId);
+      if (target) savePostToFirebase(target);
+      return updated;
+    });
   };
 
   const addComment = (postId: string, content: string) => {
@@ -808,28 +890,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: 'Just now'
     };
 
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        return { ...p, comments: [...p.comments, newComment] };
-      }
-      return p;
-    }));
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, comments: [...p.comments, newComment] };
+        }
+        return p;
+      });
+      const target = updated.find(p => p.id === postId);
+      if (target) savePostToFirebase(target);
+      return updated;
+    });
   };
 
   const deleteComment = (postId: string, commentId: string) => {
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        return { ...p, comments: p.comments.filter(c => c.id !== commentId) };
-      }
-      return p;
-    }));
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, comments: p.comments.filter(c => c.id !== commentId) };
+        }
+        return p;
+      });
+      const target = updated.find(p => p.id === postId);
+      if (target) savePostToFirebase(target);
+      return updated;
+    });
   };
 
   const deletePost = (postId: string) => {
     const postToDelete = posts.find(p => p.id === postId);
     setPosts(prev => prev.filter(p => p.id !== postId));
+    deletePostFromFirebase(postId);
     if (postToDelete?.eventId) {
       setEvents(prev => prev.filter(e => e.id !== postToDelete.eventId));
+      deleteEventFromFirebase(postToDelete.eventId);
     }
   };
 
@@ -837,17 +931,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleRsvp = (eventId: string) => {
     if (!currentUser) return;
-    setEvents(prev => prev.map(e => {
-      if (e.id === eventId) {
-        const hasRsvpd = e.rsvps.includes(currentUser.id);
-        const rsvps = hasRsvpd 
-          ? e.rsvps.filter(id => id !== currentUser.id)
-          : [...e.rsvps, currentUser.id];
-        const attendeeCount = hasRsvpd ? e.attendeeCount - 1 : e.attendeeCount + 1;
-        return { ...e, rsvps, attendeeCount };
-      }
-      return e;
-    }));
+    setEvents(prev => {
+      const updated = prev.map(e => {
+        if (e.id === eventId) {
+          const hasRsvpd = e.rsvps.includes(currentUser.id);
+          const rsvps = hasRsvpd 
+            ? e.rsvps.filter(id => id !== currentUser.id)
+            : [...e.rsvps, currentUser.id];
+          const attendeeCount = hasRsvpd ? e.attendeeCount - 1 : e.attendeeCount + 1;
+          return { ...e, rsvps, attendeeCount };
+        }
+        return e;
+      });
+      const target = updated.find(e => e.id === eventId);
+      if (target) saveEventToFirebase(target);
+      return updated;
+    });
   };
 
   const createEvent = (eventData: Omit<ReunionEvent, 'id' | 'attendeeCount' | 'rsvps'>) => {
@@ -858,15 +957,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rsvps: currentUser ? [currentUser.id] : []
     };
     setEvents(prev => [newEvent, ...prev]);
+    saveEventToFirebase(newEvent);
   };
 
   const editEvent = (eventId: string, data: Partial<ReunionEvent>) => {
-    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, ...data } : e));
+    setEvents(prev => {
+      const updated = prev.map(e => e.id === eventId ? { ...e, ...data } : e);
+      const target = updated.find(e => e.id === eventId);
+      if (target) saveEventToFirebase(target);
+      return updated;
+    });
   };
 
   const deleteEvent = (eventId: string) => {
     setEvents(prev => prev.filter(e => e.id !== eventId));
     setPosts(prev => prev.filter(p => p.eventId !== eventId));
+    deleteEventFromFirebase(eventId);
   };
 
   // ---------------- SOUVENIRS / MARKETPLACE ----------------
@@ -879,6 +985,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'new'
     };
     setOrderInquiries(prev => [newOrder, ...prev]);
+    saveOrderToFirebase(newOrder);
   };
 
   const addProduct = (prodData: Omit<Product, 'id'>) => {
@@ -887,18 +994,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `prod-${Date.now()}`
     };
     setProducts(prev => [newProd, ...prev]);
+    saveProductToFirebase(newProd);
   };
 
   const editProduct = (productId: string, data: Partial<Product>) => {
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, ...data } : p));
+    setProducts(prev => {
+      const updated = prev.map(p => p.id === productId ? { ...p, ...data } : p);
+      const target = updated.find(p => p.id === productId);
+      if (target) saveProductToFirebase(target);
+      return updated;
+    });
   };
 
   const deleteProduct = (prodId: string) => {
     setProducts(prev => prev.filter(p => p.id !== prodId));
+    deleteProductFromFirebase(prodId);
   };
 
   const updateOrderStatus = (orderId: string, status: OrderInquiry['status']) => {
-    setOrderInquiries(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    setOrderInquiries(prev => {
+      const updated = prev.map(o => o.id === orderId ? { ...o, status } : o);
+      const target = updated.find(o => o.id === orderId);
+      if (target) saveOrderToFirebase(target);
+      return updated;
+    });
   };
 
   const resetAllData = () => {
@@ -909,17 +1028,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrderInquiries([]);
     setCurrentUser(INITIAL_USERS[0]);
 
-    fetch('/api/db/sync/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        users: INITIAL_USERS,
-        posts: INITIAL_POSTS,
-        events: INITIAL_EVENTS,
-        products: INITIAL_PRODUCTS,
-        orders: []
-      })
-    }).catch(err => console.error('Failed resetting JSON database files:', err));
+    seedAllToFirebase({
+      users: INITIAL_USERS,
+      posts: INITIAL_POSTS,
+      events: INITIAL_EVENTS,
+      products: INITIAL_PRODUCTS,
+      orders: []
+    }).catch(err => console.error('Failed resetting Firebase database:', err));
   };
 
   return (
@@ -981,9 +1096,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateOrderStatus,
         resetAllData,
 
-        // Local JSON DB
+        // Firebase Cloud DB
         isDbLoaded,
         dbSyncStatus,
+        firebaseSyncStatus,
+        firebaseProject,
+        seedFirebaseData,
+        refreshFromFirebase,
         refreshFromDatabase,
       }}
     >

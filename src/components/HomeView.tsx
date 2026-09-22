@@ -151,9 +151,6 @@ export const HomeView: React.FC = () => {
                 ইআইআইএন: ১১১৮৪৭
               </span>
               <span className="px-2.5 py-1 rounded-none bg-slate-100 text-slate-700 font-medium border border-slate-200">
-                প্রধান শিক্ষক: মোঃ সামছুল আলম
-              </span>
-              <span className="px-2.5 py-1 rounded-none bg-slate-100 text-slate-700 font-medium border border-slate-200">
                 শ্রেণি: নার্সারি - দশম
               </span>
               <span className="px-2.5 py-1 rounded-none bg-slate-100 text-slate-700 font-medium border border-slate-200">

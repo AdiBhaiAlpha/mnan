@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "default": "mukulalumni",
+    "black-book": "black-book-65d42"
+  },
+  "targets": {
+    "mukulalumni": {
+      "hosting": {
+        "mukulalumni": [
+          "mukulalumni"
+        ]
+      }
+    }
+  }
+}
+

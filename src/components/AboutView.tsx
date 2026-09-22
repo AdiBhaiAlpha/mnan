@@ -32,7 +32,7 @@ export const AboutView: React.FC = () => {
     { label: 'ইআইআইএন (EIIN)', labelEn: 'EIIN Number', value: '১১১৮৪৭ (111847)', valueEn: '111847' },
     { label: 'প্রতিষ্ঠাকাল', labelEn: 'Established', value: '১৯৭০ খ্রিষ্টাব্দ (৫৫ বছর পূর্বে)', valueEn: '1970 (55+ Years of Legacy)' },
     { label: 'প্রতিষ্ঠাতা', labelEn: 'Founder', value: 'অধ্যক্ষ আমীর আহাম্মদ চৌধুরী রতন (প্রয়াত) ও ময়মনসিংহ জেলা মুকুল ফৌজ', valueEn: 'Principal Amir Ahammad Chowdhury Ratan & Mymensingh District Mukul Fouj' },
-    { label: 'প্রধান শিক্ষক', labelEn: 'Headmaster', value: 'মোঃ সামছুল আলম', valueEn: 'Md. Shamsul Alam' },
+    { label: 'প্রধান শিক্ষক কার্যালয়', labelEn: 'Headmaster Office', value: 'প্রধান শিক্ষক কার্যালয়, মুকুল নিকেতন উচ্চ বিদ্যালয়', valueEn: 'Headmaster Office, Mukul Niketon High School' },
     { label: 'প্রতিষ্ঠান ধরন', labelEn: 'Institution Type', value: 'বেসরকারি উচ্চ বিদ্যালয় (Private Secondary School)', valueEn: 'Private High School' },
     { label: 'শিক্ষাদান পর্যায়', labelEn: 'Class Range', value: 'নার্সারি হতে দশম শ্রেণি (Nursery – Class 10)', valueEn: 'Nursery to Class 10 (Secondary)' },
     { label: 'ক্যাম্পাস আয়তন', labelEn: 'Campus Size', value: 'প্রায় ১ একর (1 Acre)', valueEn: 'Approx. 1 Acre in Mymensingh City Center' },
